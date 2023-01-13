@@ -1,3 +1,3 @@
-module backend-api
+module backend_api
 
 go 1.19
