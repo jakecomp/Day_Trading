@@ -34,13 +34,12 @@ func homePage(w http.ResponseWriter, r *http.Request) {
 
 func Signup(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Endpoint Hit: signup")
-	db, ctx, cancel, dberr := connect("mongodb://localhost:27017")
+	db, ctx, dberr := connect()
 	if dberr != nil {
 		fmt.Println("Error connecting to DB")
 		panic(dberr)
 	}
 
-	fmt.Println("Request body : ", r)
 	// Parse and decode the request body into a new `Credentials` instance
 	creds := &Credentials{}
 	err := json.NewDecoder(r.Body).Decode(creds)
@@ -55,7 +54,8 @@ func Signup(w http.ResponseWriter, r *http.Request) {
 	// The second argument is the cost of hashing, which we arbitrarily set as 8 (this value can be more or less, depending on the computing power you wish to utilize)
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(creds.Password), 8)
 	if err != nil {
-		fmt.Println("Error hashing ")
+		fmt.Println("Error hashing: ", err)
+		return
 	}
 	fmt.Println("Password has been hashed")
 	var doc = new(user_doc)
@@ -63,9 +63,9 @@ func Signup(w http.ResponseWriter, r *http.Request) {
 	doc.Hash = string(hashedPassword)
 	err = nil
 	collection := db.Database(database).Collection("users")
-	result, err := collection.InsertOne(ctx, doc)
+	result, err := collection.InsertOne(context.TODO(), doc)
 	if err != nil {
-		fmt.Println("Error Inserting to DB")
+		fmt.Println("Error Inserting to DB: ", err)
 		return
 	}
 	fmt.Fprintf(w, "SIGNED YOU UP!")
@@ -73,8 +73,7 @@ func Signup(w http.ResponseWriter, r *http.Request) {
 
 	print(result)
 
-	defer cancel()
-	db.Disconnect(ctx)
+	defer db.Disconnect(ctx)
 }
 
 func Signin(w http.ResponseWriter, r *http.Request) {
@@ -92,15 +91,10 @@ func main() {
 	handleRequests()
 }
 
-func connect(uri string) (*mongo.Client, context.Context,
-	context.CancelFunc, error) {
-
-	// ctx will be used to set deadline for process, here
-	// deadline will of 30 seconds.
-	ctx, cancel := context.WithTimeout(context.Background(),
-		30*time.Second)
-
-	// mongo.Connect return mongo.Client method
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
-	return client, ctx, cancel, err
+func connect() (*mongo.Client, context.Context, error) {
+	clientOptions := options.Client()
+	clientOptions.ApplyURI("mongodb://admin:admin@localhost:27017")
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	client, err := mongo.Connect(ctx, clientOptions)
+	return client, ctx, err
 }
