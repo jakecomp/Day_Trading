@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
+	"github.com/gorilla/websocket"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -17,6 +18,7 @@ import (
 )
 
 var db *mongo.Client
+var upgrader = websocket.Upgrader{}
 
 const database = "day_trading"
 
@@ -110,6 +112,35 @@ func Signin(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Fprintf(w, token)
 	fmt.Println("Token generated: ", string(token))
+	socketHandler(w, r)
+}
+
+func socketHandler(w http.ResponseWriter, r *http.Request) {
+	// Upgrade our raw HTTP connection to a websocket based one
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Print("Error during connection upgradation:", err)
+		return
+	}
+	defer conn.Close()
+	socketReader(conn)
+}
+
+func socketReader(conn *websocket.Conn) {
+	// Event Loop, Handle Comms in here
+	for {
+		messageType, message, err := conn.ReadMessage()
+		if err != nil {
+			log.Println("Error during message reading:", err)
+			break
+		}
+		log.Printf("Received: %s", message)
+		err = conn.WriteMessage(messageType, message)
+		if err != nil {
+			log.Println("Error during message writing:", err)
+			break
+		}
+	}
 }
 
 func handleRequests() {
