@@ -151,6 +151,7 @@ func handleRequests() {
 }
 
 func main() {
+	fmt.Println("RUNNING ON PORT 8000...")
 	handleRequests()
 }
 

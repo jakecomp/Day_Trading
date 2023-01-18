@@ -15,4 +15,5 @@ data_*/
 mono_crash.*.json
 .devcontainer/
 .vscode
-backend_api/backend_api.code-workspace
+backend_api/backend_api.code-workspace 
+*.exe
