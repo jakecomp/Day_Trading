@@ -114,10 +114,18 @@ func Signin(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Fprintf(w, token)
 	fmt.Println("Token generated: ", string(token))
-	socketHandler(w, r)
 }
 
 func socketHandler(w http.ResponseWriter, r *http.Request) {
+	// Authenticate User
+	var valid = validateToken(w, r)
+	if valid != nil {
+		fmt.Println("Token not valid!")
+		return
+	}
+
+	fmt.Println("Token Valid! Connecting Websocket...")
+
 	// Upgrade our raw HTTP connection to a websocket based one
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -133,13 +141,13 @@ func socketReader(conn *websocket.Conn) {
 	for {
 		messageType, message, err := conn.ReadMessage()
 		if err != nil {
-			log.Println("Error during message reading:", err)
+			fmt.Println("Error during message reading:", err)
 			break
 		}
-		log.Printf("Received: %s", message)
+		fmt.Printf("Received: %s", message)
 		err = conn.WriteMessage(messageType, message)
 		if err != nil {
-			log.Println("Error during message writing:", err)
+			fmt.Println("Error during message writing:", err)
 			break
 		}
 	}
@@ -149,6 +157,7 @@ func handleRequests() {
 	http.HandleFunc("/", homePage)
 	http.HandleFunc("/signup", Signup)
 	http.HandleFunc("/signin", Signin)
+	http.HandleFunc("/ws", socketHandler)
 	log.Fatal(http.ListenAndServe(":8000", nil))
 }
 
