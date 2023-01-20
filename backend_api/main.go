@@ -39,11 +39,13 @@ func homePage(w http.ResponseWriter, r *http.Request) {
 
 func Signup(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Endpoint Hit: signup")
+
 	db, ctx := connect()
 
 	// Parse and decode the request body into a new `Credentials` instance
 	creds := &Credentials{}
 	err := json.NewDecoder(r.Body).Decode(creds)
+	fmt.Println(creds)
 	if err != nil {
 		// If there is something wrong with the request body, return a 400 status
 		fmt.Println("Error with request format")

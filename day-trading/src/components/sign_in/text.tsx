@@ -2,7 +2,7 @@ import styled from '@emotion/styled'
 import { Link } from 'react-router-dom'
 
 export const SignInHeader = styled.div`
-    font-size: 36px;
+    font-size: 48px;
     color: #000000;
     line-height: 43.88px;
 `
