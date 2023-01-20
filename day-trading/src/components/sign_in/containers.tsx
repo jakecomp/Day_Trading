@@ -12,3 +12,8 @@ export const HeaderContainer = styled.div`
     flex-direction: column;
     gap: 12px;
 `
+export const InputContainer = styled.div`
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+`

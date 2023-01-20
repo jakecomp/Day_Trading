@@ -1,12 +1,40 @@
-import styled from '@emotion/styled'
 import { BigBlackButton } from '../components/atoms/button'
 import { SignBackground } from '../components/sign_in/background'
 import { Card } from '../components/sign_in/card'
 import { SignInHeader, SignInLink, SignInText } from '../components/sign_in/text'
-import { HeaderContainer, LinkContainer } from '../components/sign_in/containers'
+import { HeaderContainer, InputContainer, LinkContainer } from '../components/sign_in/containers'
 import { FieldForm, InputLabel, SignField } from '../components/sign_in/field'
+import { useForm } from 'react-hook-form'
+import useSWR from 'swr'
+import { useState } from 'react'
 
-export default function SignUp() {
+export const SignUp = () => {
+    interface signForm {
+        username: string
+        password: string
+    }
+
+    const { register, handleSubmit } = useForm<signForm>({ mode: 'onSubmit' })
+    const RetrieveData = (data: signForm) => {
+        console.log(data)
+
+        const report = {
+            username: data.username,
+            password: data.password,
+        }
+
+        try {
+            fetch('http://localhost:8000/signup', {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+                body: JSON.stringify(report),
+            }).then((response) => response.json)
+        } catch (error) {
+            console.error(error)
+        }
+    }
+
     return (
         <div>
             <SignBackground>
@@ -19,18 +47,19 @@ export default function SignUp() {
                         </LinkContainer>
                     </HeaderContainer>
 
-                    <FieldForm>
-                        <InputLabel>First name</InputLabel>
-                        <SignField placeholder='John'></SignField>
-                        <InputLabel>Last name</InputLabel>
-                        <SignField placeholder='Smith'></SignField>
-                        <InputLabel>Email address</InputLabel>
-                        <SignField placeholder='john.smith@email.com'></SignField>
-                        <InputLabel>Password</InputLabel>
-                        <SignField type='password' placeholder='Must be at least 6 characters'></SignField>
+                    <FieldForm onSubmit={handleSubmit(RetrieveData)}>
+                        <InputContainer>
+                            <InputLabel>Username</InputLabel>
+                            <SignField {...register('username')}></SignField>
+                            <InputLabel>Password</InputLabel>
+                            <SignField
+                                type='password'
+                                placeholder='Must be at least 6 characters'
+                                {...register('password')}
+                            ></SignField>
+                        </InputContainer>
+                        <BigBlackButton>Create account</BigBlackButton>
                     </FieldForm>
-
-                    <BigBlackButton>Create account</BigBlackButton>
                 </Card>
             </SignBackground>
         </div>
