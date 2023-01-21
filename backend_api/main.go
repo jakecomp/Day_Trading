@@ -39,6 +39,10 @@ func homePage(w http.ResponseWriter, r *http.Request) {
 
 func Signup(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Endpoint Hit: signup")
+	setupCORS(w, r)
+	if (*r).Method == "OPTIONS" {
+		return
+	}
 
 	db, ctx := connect()
 
@@ -77,6 +81,10 @@ func Signup(w http.ResponseWriter, r *http.Request) {
 
 func Signin(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Endpoint Hit: signin")
+	setupCORS(w, r)
+	if (*r).Method == "OPTIONS" {
+		return
+	}
 	db, ctx := connect()
 
 	// Parse and decode the request body into a new `Credentials` instance
@@ -112,27 +120,31 @@ func Signin(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Error generating JWT: ", err)
 		panic(err)
 	}
-	fmt.Fprintf(w, token)
+
+	fmt.Fprintf(w, string(token))
 	fmt.Println("Token generated: ", string(token))
 }
 
 func socketHandler(w http.ResponseWriter, r *http.Request) {
 	// Authenticate User
+	fmt.Println("Endpoint Hit: WS")
 	var valid = validateToken(w, r)
 	if valid != nil {
-		fmt.Println("Token not valid!")
+		fmt.Println("Token not valid! Error: ", valid)
 		return
 	}
 
 	fmt.Println("Token Valid! Connecting Websocket...")
 
 	// Upgrade our raw HTTP connection to a websocket based one
+	upgrader.CheckOrigin = func(r *http.Request) bool { return true }
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Print("Error during connection upgradation:", err)
 		return
 	}
 	defer conn.Close()
+	err = conn.WriteMessage(1, []byte("Hello there"))
 	socketReader(conn)
 }
 
@@ -144,13 +156,20 @@ func socketReader(conn *websocket.Conn) {
 			fmt.Println("Error during message reading:", err)
 			break
 		}
-		fmt.Printf("Received: %s", message)
+		fmt.Printf("Received: %s", string(message))
+
 		err = conn.WriteMessage(messageType, message)
 		if err != nil {
 			fmt.Println("Error during message writing:", err)
 			break
 		}
 	}
+}
+
+func setupCORS(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT")
+	w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding")
 }
 
 func handleRequests() {
@@ -208,10 +227,9 @@ func generateJWT(username string) (string, error) {
 }
 
 func validateToken(w http.ResponseWriter, r *http.Request) (err error) {
-	if r.Header["Token"] == nil {
-		fmt.Fprintf(w, "can not find token in header")
-		return errors.New("Token error")
-	}
+
+	test := r.URL.Query().Get("token")
+	fmt.Println("Received a token: ", test)
 
 	token, err := jwt.Parse(r.URL.Query().Get("token"), func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -222,13 +240,13 @@ func validateToken(w http.ResponseWriter, r *http.Request) (err error) {
 
 	if token == nil {
 		fmt.Fprintf(w, "invalid token")
-		return errors.New("Token error")
+		return errors.New("Token error, invalid")
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
 		fmt.Fprintf(w, "couldn't parse claims")
-		return errors.New("Token error")
+		return errors.New("Token error, claims error")
 	}
 
 	exp := claims["exp"].(float64)
