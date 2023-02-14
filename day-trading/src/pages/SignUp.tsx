@@ -29,7 +29,13 @@ export const SignUp = () => {
                 mode: 'no-cors',
                 headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
                 body: JSON.stringify(report),
-            }).then((response) => response.json)
+            })
+                .then((response) => response.json)
+                .then((response) => {
+                    console.log('Server Response: ' + response)
+                })
+
+            // .then((ws = new WebSocket('ws://localhost:8000/ws?token=' + response)))
         } catch (error) {
             console.error(error)
         }

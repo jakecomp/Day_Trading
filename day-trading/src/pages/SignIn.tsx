@@ -5,6 +5,7 @@ import { SignInHeader, SignInLink, SignInText } from '../components/sign_in/text
 import { InputContainer, LinkContainer } from '../components/sign_in/containers'
 import { FieldForm, InputLabel, SignField } from '../components/sign_in/field'
 import { useForm } from 'react-hook-form'
+import wallet from '../assets/Wallet_duotone_line.svg'
 
 export const SignIn = () => {
     const { register, handleSubmit } = useForm()
