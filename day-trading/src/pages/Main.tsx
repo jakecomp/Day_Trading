@@ -1,4 +1,5 @@
 import { Routes, Route } from 'react-router-dom'
+import { Home } from './Home'
 import { SignIn } from './SignIn'
 import { SignUp } from './SignUp'
 
@@ -17,6 +18,14 @@ const Main = () => (
             element={
                 <>
                     <SignIn />
+                </>
+            }
+        ></Route>
+        <Route
+            path='/home'
+            element={
+                <>
+                    <Home />
                 </>
             }
         ></Route>
