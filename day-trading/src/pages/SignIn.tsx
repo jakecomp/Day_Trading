@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier */
 import { BigBlackButton } from '../components/atoms/button'
 import { SignBackground } from '../components/sign_in/background'
 import { Card } from '../components/sign_in/card'
@@ -5,11 +6,42 @@ import { SignInHeader, SignInLink, SignInText } from '../components/sign_in/text
 import { InputContainer, LinkContainer } from '../components/sign_in/containers'
 import { FieldForm, InputLabel, SignField } from '../components/sign_in/field'
 import { useForm } from 'react-hook-form'
-import wallet from '../assets/Wallet_duotone_line.svg'
 
 export const SignIn = () => {
-    const { register, handleSubmit } = useForm()
-    const RetrieveData = (data: any) => console.log(data)
+    interface signForm {
+        username: string
+        password: string
+    }
+
+    let socket: WebSocket
+
+    const { register, handleSubmit } = useForm<signForm>({ mode: 'onSubmit' })
+    const RetrieveData = (data: signForm) => {
+        const report = {
+            username: data.username,
+            password: data.password,
+        }
+
+        try {
+            fetch('http://localhost:8000/signin', {
+                method: 'POST',
+                headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+                body: JSON.stringify(report),
+            })
+                .then((response) => response.text())
+                .then((response) => {
+                    socket = new WebSocket('ws://localhost:8000/ws?token=' + response)
+                    socket.onopen = function () {
+                        socket.send('Hi Hi Server')
+                        socket.onmessage = (msg: any) => {
+                            console.log('Server Message: ' + msg.data)
+                        }
+                    }
+                })
+        } catch (error) {
+            console.error(error)
+        }
+    }
 
     return (
         <div>

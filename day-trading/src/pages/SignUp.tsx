@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier */
 import { BigBlackButton } from '../components/atoms/button'
 import { SignBackground } from '../components/sign_in/background'
 import { Card } from '../components/sign_in/card'
@@ -5,8 +6,6 @@ import { SignInHeader, SignInLink, SignInText } from '../components/sign_in/text
 import { HeaderContainer, InputContainer, LinkContainer } from '../components/sign_in/containers'
 import { FieldForm, InputLabel, SignField } from '../components/sign_in/field'
 import { useForm } from 'react-hook-form'
-import useSWR from 'swr'
-import { useState } from 'react'
 
 export const SignUp = () => {
     interface signForm {
@@ -31,6 +30,7 @@ export const SignUp = () => {
                 body: JSON.stringify(report),
             })
                 .then((response) => response.json)
+            .then((response) => console.log(response))
                 .then((response) => {
                     console.log('Server Response: ' + response)
                 })
