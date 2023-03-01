@@ -108,7 +108,7 @@ func socketReader(conn *websocket.Conn) {
 
 func handleRequests() {
 	http.HandleFunc("/ws", socketHandler)
-	log.Fatal(http.ListenAndServe(":8001", nil))
+	log.Fatal(http.ListenAndServe("10.9.0.7:8001", nil))
 }
 
 func main() {

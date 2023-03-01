@@ -337,7 +337,7 @@ func socketReader(conn *websocket.Conn) {
 
 func main() {
 	// TODO update to queue server IP based on docker-compose
-	queueServiceConn, _, _ := websocket.DefaultDialer.Dial("ws://localhost:8001/ws?", nil)
+	queueServiceConn, _, _ := websocket.DefaultDialer.Dial("ws://10.9.0.7:8001/ws?", nil)
 	fmt.Println("Worker Service Starting...")
 	socketReader(queueServiceConn)
 }

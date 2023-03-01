@@ -35,5 +35,5 @@ func main() {
 	router := gin.Default()
 	router.GET("/", gen_quote)
 
-	router.Run("localhost:8002")
+	router.Run("10.9.0.6:8002")
 }
