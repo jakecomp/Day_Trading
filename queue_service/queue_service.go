@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -8,19 +9,38 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-var upgrader = websocket.Upgrader{}
-var transactionQueue = make([]int, 0)
+type Transaction struct {
+	Transaction_id string
+	User_id        string
+	Command        string
+	Stock_id       string
+	Stock_price    float32
+	Cash_value     float32
+}
 
-func enqueue(queue []int, element int) []int {
+type Message struct {
+	Command string
+	Data    *Transaction
+}
+
+var upgrader = websocket.Upgrader{}
+var transactionQueue = make([]Transaction, 0)
+
+func enqueue(queue []Transaction, element Transaction) []Transaction {
 	queue = append(queue, element)
 	fmt.Println("Enqueued:", element)
 	return queue
 }
 
-func dequeue(queue []int) (int, []int) {
-	element := queue[0]
+func dequeue(queue []Transaction) (*Transaction, []Transaction) {
+
+	if len(queue) == 0 {
+		return nil, queue
+	}
+
+	element := &queue[0]
 	if len(queue) == 1 {
-		var tmp = []int{}
+		var tmp = []Transaction{}
 		return element, tmp
 	}
 
@@ -39,21 +59,46 @@ func socketHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.Close()
-	err = conn.WriteMessage(1, []byte("Its Queue Time"))
 	socketReader(conn)
 }
 
 func socketReader(conn *websocket.Conn) {
 	// Event Loop, Handle Comms in here
+	var message Message
+	var transaction *Transaction
 	for {
-		messageType, message, err := conn.ReadMessage()
+		messageType, msg, err := conn.ReadMessage()
 		if err != nil {
 			fmt.Println("Error during message reading:", err)
 			break
 		}
-		fmt.Printf("Received: %s", string(message))
 
-		err = conn.WriteMessage(messageType, message)
+		fmt.Println("Received: ", string(msg))
+		// Message Format: {"Command" : "ENQUEUE" , "Data" : "Transaction{}" }
+		err = json.Unmarshal(msg, &message)
+
+		// Handle Enqueue and Dequeue
+		if message.Command == "ENQUEUE" {
+			transactionQueue = enqueue(transactionQueue, *message.Data)
+		} else if message.Command == "DEQUEUE" {
+			transaction, transactionQueue = dequeue(transactionQueue)
+			// Empty check
+			if transaction == nil {
+				message.Command = "EMPTY"
+				msg, err = json.Marshal(message)
+				err = conn.WriteMessage(messageType, msg)
+			} else {
+				message.Command = "SUCCESS"
+				message.Data = transaction
+				msg, err = json.Marshal(message)
+				err = conn.WriteMessage(messageType, msg)
+			}
+		} else {
+			fmt.Println("Bad Request Format")
+			fmt.Println("Request: ", message)
+			err = conn.WriteMessage(websocket.TextMessage, []byte("Error: Bad Request Format"))
+		}
+
 		if err != nil {
 			fmt.Println("Error during message writing:", err)
 			break
@@ -68,4 +113,5 @@ func handleRequests() {
 
 func main() {
 	fmt.Println("Queue Service Starting... Port 8001")
+	handleRequests()
 }
