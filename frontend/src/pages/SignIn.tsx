@@ -23,14 +23,14 @@ export const SignIn = () => {
         }
 
         try {
-            fetch('http://localhost:8000/signin', {
+            fetch('http://10.9.0.4:8000/signin', {
                 method: 'POST',
                 headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
                 body: JSON.stringify(report),
             })
                 .then((response) => response.text())
                 .then((response) => {
-                    socket = new WebSocket('ws://localhost:8000/ws?token=' + response)
+                    socket = new WebSocket('ws://10.9.0.4:8000/ws?token=' + response)
                     socket.onopen = function () {
                         socket.send('Hi Hi Server')
                         socket.onmessage = (msg: any) => {
