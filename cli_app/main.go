@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/gorilla/websocket"
 	"io/ioutil"
@@ -11,7 +12,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/signal"
 	"strings"
 )
 
@@ -71,35 +71,7 @@ type User struct {
 
 type token []byte
 
-func signup(user User) error {
-	requestUrl := "http://localhost:8000/signup"
-
-	usrInf, err := json.Marshal(user)
-	fmt.Printf(string(usrInf))
-	bodyReader := bytes.NewReader(usrInf)
-	if err != nil {
-		log.Fatal("Failed to Marshal", err)
-	}
-
-	res, err := http.Post(requestUrl, "application/json", bodyReader)
-	if err != nil {
-		log.Fatal("Failed to connect", err)
-	}
-
-	body, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		log.Fatal("Failed to read body", err)
-	}
-
-	fmt.Printf("res was %s\n", string(body))
-	if strings.Compare(string(body), `SIGNED YOU UP!`) != 0 {
-		return err
-	}
-	return nil
-
-}
-func signin(user User) (token, error) {
-	requestUrl := "http://localhost:8000/signin"
+func marshalAndSend(user User, requestUrl string) (body []byte) {
 	usrInf, err := json.Marshal(user)
 	bodyReader := bytes.NewReader(usrInf)
 
@@ -112,16 +84,61 @@ func signin(user User) (token, error) {
 	if err != nil {
 		log.Fatal("Failed to connect ", err)
 	}
-
-	body, err := ioutil.ReadAll(res.Body)
-
+	bod, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		log.Fatal("Failed to read body ", err)
 	}
+	return bod
+}
+
+func signup(user User) error {
+	body := marshalAndSend(user, "http://localhost:8000/signup")
 
 	fmt.Printf("res was %s\n", string(body))
-	fmt.Printf("connecting\n")
+	if strings.Compare(string(body), `SIGNED YOU UP!`) != 0 {
+		return errors.New("Failed to sign up")
+	}
+	return nil
+
+}
+
+func signin(user User) (token, error) {
+	body := marshalAndSend(user, "http://localhost:8000/signin")
+
+	fmt.Printf("res was %s\n", string(body))
 	return token(body), nil
+}
+
+func connectToSocket(tok token) *websocket.Conn {
+	addr := "localhost:8000"
+	u := "ws://" + addr + "/ws?token=" + string(tok)
+	log.Printf("connecting to %s", u)
+
+	// Connect to websocket server on localhost:8000/echo
+	c, _, err := websocket.DefaultDialer.Dial(u, nil)
+	if err != nil {
+		log.Fatal("dial:", err)
+	}
+
+	return c
+}
+
+func forwardCommands(cmds chan Command, c *websocket.Conn) {
+	for cmd := range cmds {
+		jcmd, err := json.Marshal(cmd)
+		if err != nil {
+			log.Println("failed during command marshelling ", err)
+		}
+		err = c.WriteMessage(websocket.TextMessage, jcmd)
+		mType, m, err := c.ReadMessage()
+		if err != nil {
+			log.Fatal("error on read message: ", err, cmd)
+		}
+		if mType == websocket.TextMessage {
+			log.Println(string(m))
+		}
+	}
+
 }
 
 func main() {
@@ -137,48 +154,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	interrupt := make(chan os.Signal, 1)
-
-	signal.Notify(interrupt, os.Interrupt)
-
-	addr := "localhost:8000"
-	u := "ws://" + addr + "/ws?token=" + string(tok)
-	log.Printf("connecting to %s", u)
-
-	// Connect to websocket server on localhost:8000/echo
-	c, _, err := websocket.DefaultDialer.Dial(u, nil)
+	c := connectToSocket(tok)
 	defer c.Close()
 
-	if err != nil {
-		log.Fatal("dial:", err)
-	}
-
-	mType, b, err := c.ReadMessage()
-
-	if err != nil {
-		log.Fatal("read: ", err)
-	}
-
-	if mType == websocket.TextMessage {
-		log.Println(string(b))
-	}
-
 	scanner := bufio.NewReader(os.Stdin)
-	// TODO establish connection
-	for cmd := range parseCmds(scanner) {
-		jcmd, err := json.Marshal(cmd)
-		if err != nil {
-			log.Println("failed during command marshelling ", err)
-		}
-		err = c.WriteMessage(websocket.TextMessage, jcmd)
-		mType, m, err := c.ReadMessage()
-		if err != nil {
-			log.Fatal("error on read message: ", err, cmd)
-		}
-		if mType == websocket.TextMessage {
-			log.Println(string(m))
-		}
-	}
+	forwardCommands(parseCmds(scanner), c)
 	os.Exit(1)
 
 }
