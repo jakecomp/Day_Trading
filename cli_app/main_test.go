@@ -12,7 +12,7 @@ func Test_parsing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.command != "ADD" || c.ticket != 1 {
+	if c.Command != "ADD" || c.Ticket != 1 {
 		t.Fatal(err)
 	}
 }
