@@ -8,3 +8,6 @@ run: app
 
 test: main.go main_test.go
 	go test
+
+clean:
+	rm -f app
