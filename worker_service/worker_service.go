@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -11,15 +12,37 @@ import (
 type Command struct {
 	Ticket  int
 	Command string
-	Args    []string
+	Args    Args
 }
 
 type userid string
 type amount float32
 type StockSymbol string
 type filename string
+type Args []string
+type result string
 
-func dispatch(cmd Command) {}
+func dispatch(cmd Command) {
+	funcLookup := map[string]func(Args) error{
+		"ADD":              add,
+		"QUOTE":            quote,
+		"BUY":              buy,
+		"COMMIT_BUY":       commit_buy,
+		"CANCEL_BUY":       cancel_buy,
+		"SELL":             sell,
+		"COMMIT_SELL":      commit_sell,
+		"CANCEL_SELL":      cancel_sell,
+		"SET_BUY_AMOUNT":   set_buy_amount,
+		"CANCEL_SET_BUY":   cancel_set_buy,
+		"SET_BUY_TRIGGER":  set_buy_trigger,
+		"SET_SELL_AMOUNT":  set_sell_amount,
+		"SET_SELL_TRIGGER": set_sell_trigger,
+		"CANCEL_SET_SELL":  cancel_set_sell,
+		"DUMPLOG":          dumplog,
+		"DISPLAY_SUMMARY":  display_summary,
+	}
+	funcLookup[cmd.Command](cmd.Args)
+}
 
 // Purpose:
 //
@@ -36,7 +59,7 @@ func dispatch(cmd Command) {}
 // Example:
 //
 //	ADD,jsmith,200.00
-func (cmd Command) add(userid, amount) error {
+func add(a Args) error {
 	return nil
 }
 
@@ -55,7 +78,7 @@ func (cmd Command) add(userid, amount) error {
 // Example:
 //
 //	QUOTE,jsmith,ABC
-func (cmd Command) quote(userid, StockSymbol) error {
+func quote(a Args) error {
 	return nil
 }
 
@@ -76,7 +99,7 @@ func (cmd Command) quote(userid, StockSymbol) error {
 // Example:
 //
 //	BUY,jsmith,ABC,200.00
-func (cmd Command) buy(userid, StockSymbol, amount) error {
+func buy(a Args) error {
 	return nil
 }
 
@@ -99,7 +122,7 @@ func (cmd Command) buy(userid, StockSymbol, amount) error {
 // Example:
 //
 //	COMMIT_BUY,jsmith
-func (cmd Command) commit_buy(userid) error {
+func commit_buy(a Args) error {
 	return nil
 }
 
@@ -120,7 +143,7 @@ func (cmd Command) commit_buy(userid) error {
 // Example:
 //
 //	CANCEL_BUY,jsmith
-func (cmd Command) cancel_buy(userid) error {
+func cancel_buy(a Args) error {
 	return nil
 }
 
@@ -141,7 +164,7 @@ func (cmd Command) cancel_buy(userid) error {
 // Example:
 //
 //	SELL,jsmith,ABC,100.00
-func (cmd Command) sell(userid, StockSymbol, amount) error {
+func sell(a Args) error {
 	return nil
 }
 
@@ -163,7 +186,7 @@ func (cmd Command) sell(userid, StockSymbol, amount) error {
 // Example:
 //
 //	COMMIT_SELL,jsmith
-func (cmd Command) commit_sell(userid) error {
+func commit_sell(a Args) error {
 	return nil
 }
 
@@ -183,7 +206,7 @@ func (cmd Command) commit_sell(userid) error {
 // Example:
 //
 //	CANCEL_SELL,jsmith
-func (cmd Command) cancel_sell(userid) error {
+func cancel_sell(a Args) error {
 	return nil
 }
 
@@ -208,7 +231,7 @@ func (cmd Command) cancel_sell(userid) error {
 // Example:
 //
 //	SET_BUY_AMOUNT,jsmith,ABC,50.00
-func (cmd Command) set_buy_amount(userid, StockSymbol, amount) error {
+func set_buy_amount(a Args) error {
 	return nil
 }
 
@@ -230,7 +253,7 @@ func (cmd Command) set_buy_amount(userid, StockSymbol, amount) error {
 // Example:
 //
 //	CANCEL_SET_BUY,jsmith,ABC
-func (cmd Command) cancel_set_buy(userid, StockSymbol) error {
+func cancel_set_buy(a Args) error {
 	return nil
 }
 
@@ -252,7 +275,7 @@ func (cmd Command) cancel_set_buy(userid, StockSymbol) error {
 // Example:
 //
 //	SET_BUY_TRIGGER,jsmith,ABC,20.00
-func (cmd Command) set_buy_trigger(userid, StockSymbol, amount) error {
+func set_buy_trigger(a Args) error {
 	return nil
 }
 
@@ -275,7 +298,7 @@ func (cmd Command) set_buy_trigger(userid, StockSymbol, amount) error {
 // Example:
 //
 //	SET_SELL_AMOUNT,jsmith,ABC,550.50
-func (cmd Command) set_sell_amount(userid, StockSymbol, amount) error {
+func set_sell_amount(a Args) error {
 	return nil
 }
 
@@ -300,7 +323,7 @@ func (cmd Command) set_sell_amount(userid, StockSymbol, amount) error {
 // Example:
 //
 //	SET_SELL_TRIGGER, jsmith,ABC,120.00
-func (cmd Command) set_sell_trigger(userid, StockSymbol, amount) error {
+func set_sell_trigger(a Args) error {
 	return nil
 }
 
@@ -322,7 +345,7 @@ func (cmd Command) set_sell_trigger(userid, StockSymbol, amount) error {
 // Example:
 //
 //	CANCEL_SET_SELL,jsmith,ABC
-func (cmd Command) cancel_set_sell(userid, StockSymbol) error {
+func cancel_set_sell(Args) error {
 	return nil
 }
 
@@ -341,7 +364,7 @@ func (cmd Command) cancel_set_sell(userid, StockSymbol) error {
 // Example:
 //
 //	DUMPLOG,userid,filename
-func (cmd Command) dumplog(userid, filename) error {
+func dumplogUser(userid, filename) error {
 	return nil
 }
 
@@ -362,7 +385,7 @@ func (cmd Command) dumplog(userid, filename) error {
 // Example:
 //
 //	DUMPLOG,out.dump
-func (cmd Command) dumplog(filename) error {
+func dumplogAll(filename) error {
 	return nil
 }
 
@@ -385,7 +408,23 @@ func (cmd Command) dumplog(filename) error {
 // Example:
 //
 //	DISPLAY_SUMMARY,userid
-func (cmd Command) display_summary(userid) error {}
+func display_summary(Args) error {
+	return nil
+}
+
+func dumplog(a Args) error {
+	switch len(a) {
+	case 2:
+		dumplogUser(userid(a[0]), filename(a[1]))
+		break
+	case 1:
+		dumplogAll(filename(a[0]))
+		break
+	default:
+		return errors.New("Invalid number of arguments to DUMPLOG")
+	}
+	return nil
+}
 
 type Transaction struct {
 	Transaction_id string
