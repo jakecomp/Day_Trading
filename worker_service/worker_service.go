@@ -20,28 +20,21 @@ type amount float32
 type StockSymbol string
 type filename string
 type Args []string
-type result string
+type report string
 
 func dispatch(cmd Command) {
-	funcLookup := map[string]func(Args) error{
-		"ADD":              add,
-		"QUOTE":            quote,
-		"BUY":              buy,
-		"COMMIT_BUY":       commit_buy,
-		"CANCEL_BUY":       cancel_buy,
-		"SELL":             sell,
-		"COMMIT_SELL":      commit_sell,
-		"CANCEL_SELL":      cancel_sell,
-		"SET_BUY_AMOUNT":   set_buy_amount,
-		"CANCEL_SET_BUY":   cancel_set_buy,
-		"SET_BUY_TRIGGER":  set_buy_trigger,
-		"SET_SELL_AMOUNT":  set_sell_amount,
-		"SET_SELL_TRIGGER": set_sell_trigger,
-		"CANCEL_SET_SELL":  cancel_set_sell,
-		"DUMPLOG":          dumplog,
-		"DISPLAY_SUMMARY":  display_summary,
+	funcLookup := map[string]func(Command) (*report, error){
+		"ADD":             add,
+		"BUY":             buy,
+		"COMMIT_BUY":      commit_buy,
+		"CANCEL_BUY":      cancel_buy,
+		"SELL":            sell,
+		"COMMIT_SELL":     commit_sell,
+		"CANCEL_SELL":     cancel_sell,
+		"DUMPLOG":         dumplog,
+		"DISPLAY_SUMMARY": display_summary,
 	}
-	funcLookup[cmd.Command](cmd.Args)
+	funcLookup[cmd.Command](cmd)
 }
 
 // Purpose:
@@ -59,27 +52,15 @@ func dispatch(cmd Command) {
 // Example:
 //
 //	ADD,jsmith,200.00
-func add(a Args) error {
-	return nil
-}
-
-// Purpose:
-//
-//	Get the current quote for the stock for the specified user
-//
-// Pre-conditions:
-//
-//	none
-//
-// Post-Conditions:
-//
-//	the current price of the specified stock is displayed to the user
-//
-// Example:
-//
-//	QUOTE,jsmith,ABC
-func quote(a Args) error {
-	return nil
+func add(cmd Command) (*report, error) {
+	if len(cmd.Args) != 2 {
+		return nil, errors.New("Wrong number of arguments for add")
+	}
+	// const user = a[0]
+	// const amount = a[1]
+	// TODO Add Money To DB
+	// TODO Assert money in db went up by x amount
+	return nil, errors.New("unfinished")
 }
 
 // Purpose:
@@ -99,8 +80,8 @@ func quote(a Args) error {
 // Example:
 //
 //	BUY,jsmith,ABC,200.00
-func buy(a Args) error {
-	return nil
+func buy(cmd Command) (*report, error) {
+	return nil, nil
 }
 
 // Purpose:
@@ -122,8 +103,8 @@ func buy(a Args) error {
 // Example:
 //
 //	COMMIT_BUY,jsmith
-func commit_buy(a Args) error {
-	return nil
+func commit_buy(cmd Command) (*report, error) {
+	return nil, nil
 }
 
 // Purpose:
@@ -143,8 +124,8 @@ func commit_buy(a Args) error {
 // Example:
 //
 //	CANCEL_BUY,jsmith
-func cancel_buy(a Args) error {
-	return nil
+func cancel_buy(cmd Command) (*report, error) {
+	return nil, nil
 }
 
 // Purpose:
@@ -164,8 +145,8 @@ func cancel_buy(a Args) error {
 // Example:
 //
 //	SELL,jsmith,ABC,100.00
-func sell(a Args) error {
-	return nil
+func sell(cmd Command) (*report, error) {
+	return nil, nil
 }
 
 // Purpose:
@@ -186,8 +167,8 @@ func sell(a Args) error {
 // Example:
 //
 //	COMMIT_SELL,jsmith
-func commit_sell(a Args) error {
-	return nil
+func commit_sell(cmd Command) (*report, error) {
+	return nil, nil
 }
 
 // Purpose:
@@ -206,147 +187,8 @@ func commit_sell(a Args) error {
 // Example:
 //
 //	CANCEL_SELL,jsmith
-func cancel_sell(a Args) error {
-	return nil
-}
-
-// Purpose:
-//
-//	Sets a defined amount of the given stock to buy when the current
-//	stock price is less than or equal to the BUY_TRIGGER
-//
-// Pre-conditions:
-//
-//	The user's cash account must be greater than or equal to the BUY
-//	amount at the time the transaction occurs
-//
-// Post-Conditions:
-//
-//	(a) a reserve account is created for the BUY transaction to hold the
-//		specified amount in reserve for when the transaction is triggered
-//	(b) the user's cash account is decremented by the specified amount
-//	(c) when the trigger point is reached the user's stock account is
-//		updated to reflect the BUY transaction.
-//
-// Example:
-//
-//	SET_BUY_AMOUNT,jsmith,ABC,50.00
-func set_buy_amount(a Args) error {
-	return nil
-}
-
-// Purpose:
-//
-//	Cancels a SET_BUY command issued for the given stock
-//
-// Pre-conditions:
-//
-//	The must have been a SET_BUY Command issued for the given stock
-//	by the user
-//
-// Post-Conditions:
-//
-//	(a) All accounts are reset to the values they would have had had
-//	the SET_BUY Command not been issued
-//	(b) the BUY_TRIGGER for the given user and stock is also canceled.
-//
-// Example:
-//
-//	CANCEL_SET_BUY,jsmith,ABC
-func cancel_set_buy(a Args) error {
-	return nil
-}
-
-// Purpose:
-//
-//	Sets the trigger point base on the current stock price when any
-//	SET_BUY will execute.
-//
-// Pre-conditions:
-//
-//	The user must have specified a SET_BUY_AMOUNT prior to setting a
-//	SET_BUY_TRIGGER
-//
-// Post-Conditions:
-//
-//	The set of the user's buy triggers is updated to include the
-//	specified trigger
-//
-// Example:
-//
-//	SET_BUY_TRIGGER,jsmith,ABC,20.00
-func set_buy_trigger(a Args) error {
-	return nil
-}
-
-// Purpose:
-//
-//	Sets a defined amount of the specified stock to sell when the
-//	current stock price is equal or greater than the sell trigger point
-//
-// Pre-conditions:
-//
-//	The user must have the specified amount of stock in their account
-//	for that stock.
-//
-// Post-Conditions:
-//
-//	A trigger is initialized for this username/stock symbol
-//	combination, but is not complete until SET_SELL_TRIGGER is
-//	executed.
-//
-// Example:
-//
-//	SET_SELL_AMOUNT,jsmith,ABC,550.50
-func set_sell_amount(a Args) error {
-	return nil
-}
-
-// Purpose:
-//
-//	Sets the stock price trigger point for executing any SET_SELL
-//	triggers associated with the given stock and user
-//
-// Pre-conditions:
-//
-//	The user must have specified a SET_SELL_AMOUNT prior to setting a SET_SELL_TRIGGER
-//
-// Post-Conditions:
-//
-//	(a) a reserve account is created for the specified
-//		amount of the given stock
-//	(b) the user account for the given stock is
-//		reduced by the max number of stocks that could be purchased and
-//	(c) the set of the user's sell triggers is updated to include the
-//		specified trigger.
-//
-// Example:
-//
-//	SET_SELL_TRIGGER, jsmith,ABC,120.00
-func set_sell_trigger(a Args) error {
-	return nil
-}
-
-// Purpose:
-//
-//	Cancels the SET_SELL associated with the given stock and user
-//
-// Pre-conditions:
-//
-//	The user must have had a previously set SET_SELL for the given stock
-//
-// Post-Conditions:
-//
-//	(a) The set of the user's sell triggers is updated to remove the
-//		sell trigger associated with the specified stock
-//	(b) all user account information is reset to the values they would
-//		have been if the given SET_SELL command had not been issued
-//
-// Example:
-//
-//	CANCEL_SET_SELL,jsmith,ABC
-func cancel_set_sell(Args) error {
-	return nil
+func cancel_sell(a Command) (*report, error) {
+	return nil, nil
 }
 
 // Purpose:
@@ -364,8 +206,8 @@ func cancel_set_sell(Args) error {
 // Example:
 //
 //	DUMPLOG,userid,filename
-func dumplogUser(userid, filename) error {
-	return nil
+func dumplogUser(userid, filename) (*report, error) {
+	return nil, nil
 }
 
 // Purpose:
@@ -385,8 +227,8 @@ func dumplogUser(userid, filename) error {
 // Example:
 //
 //	DUMPLOG,out.dump
-func dumplogAll(filename) error {
-	return nil
+func dumplogAll(filename) (*report, error) {
+	return nil, nil
 }
 
 // Purpose:
@@ -408,11 +250,12 @@ func dumplogAll(filename) error {
 // Example:
 //
 //	DISPLAY_SUMMARY,userid
-func display_summary(Args) error {
-	return nil
+func display_summary(cmd Command) (*report, error) {
+	return nil, nil
 }
 
-func dumplog(a Args) error {
+func dumplog(cmd Command) (*report, error) {
+	a := cmd.Args
 	switch len(a) {
 	case 2:
 		dumplogUser(userid(a[0]), filename(a[1]))
@@ -421,9 +264,9 @@ func dumplog(a Args) error {
 		dumplogAll(filename(a[0]))
 		break
 	default:
-		return errors.New("Invalid number of arguments to DUMPLOG")
+		return nil, errors.New("Invalid number of arguments to DUMPLOG")
 	}
-	return nil
+	return nil, nil
 }
 
 type Transaction struct {
