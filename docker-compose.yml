@@ -4,15 +4,17 @@ services:
     build: ./mongodb 
     ports: 
       - "27017:27017"
-      
-  
+    
   backend: 
     build: ./backend_api
-    network_mode: host
     ports: 
       - "8000:8000" 
 
   frontend: 
     build: ./frontend 
     ports: 
-      - "3000:3000"
+      - "3000:3000" 
+
+  quote_server: 
+    build: ./quote_server  
+    network_mode: host
