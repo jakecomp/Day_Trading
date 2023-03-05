@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"reflect"
 	"time"
@@ -23,13 +24,7 @@ type CMD interface {
 	Postrequsite(*MessageBus) error
 }
 
-func Run(c CMD, m *MessageBus) {
-	ch := make(chan *Transaction)
-	go func() {
-		for c := range ch {
-			log.Println("Transaction commited for", c.Command)
-		}
-	}()
+func Run(c CMD, m *MessageBus, tchan chan *Transaction) {
 	log.Println("Executing prereq for ", reflect.TypeOf(c), c)
 	err := c.Prerequsite(m)
 	if err != nil {
@@ -37,7 +32,7 @@ func Run(c CMD, m *MessageBus) {
 	}
 	log.Println("Executed prereq for ", reflect.TypeOf(c), c)
 	log.Println("Executing ", reflect.TypeOf(c), c)
-	err = c.Execute(ch)
+	err = c.Execute(tchan)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -152,9 +147,6 @@ func (b BUY) Prerequsite(mb *MessageBus) error {
 	// TODO determine how to lookup user balance
 	ch := mb.Subscribe(notifyADD)
 	// TODO or balance
-	// defer close(ch)
-
-	// mb.Publish(notifyGET_BALANCE, Notification{Timestamp: time.Now(), Userid: b.userId})
 	for n := range ch {
 		if n.Userid == b.userId {
 			if *n.Amount < b.cost {
@@ -185,9 +177,8 @@ func (b BUY) Notify(mb *MessageBus) {
 func (b BUY) Postrequsite(mb *MessageBus) error {
 	// TODO determine how to lookup user balance
 	commitChan := mb.Subscribe(notifyCOMMIT_BUY)
-	// defer close(commitChan)
 	cancelChan := mb.Subscribe(notifyCANCEL_BUY)
-	// defer close(cancelChan)
+
 	select {
 	case n := <-commitChan:
 		if n.Userid == b.userId {
@@ -227,6 +218,7 @@ type COMMIT_BUY struct {
 	buy    Notification
 }
 
+// TODO Only take from the backlog
 func (b *COMMIT_BUY) Prerequsite(mb *MessageBus) error {
 	ch := mb.Subscribe(notifyBUY)
 
@@ -243,7 +235,14 @@ func (b *COMMIT_BUY) Prerequsite(mb *MessageBus) error {
 // TODO
 func (b COMMIT_BUY) Execute(ch chan *Transaction) error {
 	// TODO get these values
-	ch <- &Transaction{Transaction_id: "ID_1", User_id: b.userId, Command: notifyCOMMIT_BUY, Stock_id: *b.buy.Stock, Stock_price: 24.5, Cash_value: 600.0}
+	ch <- &Transaction{
+		Transaction_id: "ID_1",
+		User_id:        b.userId,
+		Command:        notifyCOMMIT_BUY,
+		Stock_id:       *b.buy.Stock,
+		Stock_price:    24.5,
+		Cash_value:     600.0,
+	}
 	return nil
 }
 
@@ -283,9 +282,9 @@ type CANCEL_BUY struct {
 	buy    Notification
 }
 
+// TODO Only take from the backlog
 func (b *CANCEL_BUY) Prerequsite(mb *MessageBus) error {
 	ch := mb.Subscribe(notifyBUY)
-	// defer close(ch)
 
 	for n := range ch {
 		if n.Userid == b.userId {
@@ -344,21 +343,19 @@ type SELL struct {
 // TODO check amount of stock held by user
 // TODO
 func (s SELL) Prerequsite(mb *MessageBus) error {
-	// ch := mb.Subscribe(notifyADD)
+	// Wait for the user to buy this stock
+	ch := mb.Subscribe(notifyCOMMIT_BUY)
 
-	// // mb.Publish(notifyGET_BALANCE, Notification{Timestamp: time.Now(), Userid: b.userId})
-	// for n := range ch {
-	// 	if n.Userid == s.userId {
-	// 		if *n.Amount < s.cost {
-	// 			return errors.New("Not enough money for this stock")
-	// 		} else {
-	// 			return nil
-	// 		}
-	// 	}
-	// }
-	// return errors.New("Balance Channel Prematurely Closed")
-	return nil
-
+	for n := range ch {
+		if n.Userid == s.userId {
+			if *n.Amount < s.amount {
+				return errors.New(fmt.Sprintf("Don't have %f of %s", s.amount, s.stock))
+			} else {
+				return nil
+			}
+		}
+	}
+	return errors.New("Balance Channel Prematurely Closed")
 }
 func (b SELL) Execute(ch chan *Transaction) error {
 	return nil
@@ -372,12 +369,11 @@ func (s SELL) Notify(mb *MessageBus) {
 		Amount:    &s.cost,
 	})
 }
+
 func (s SELL) Postrequsite(mb *MessageBus) error {
 	// TODO determine how to lookup user balance
 	commitChan := mb.Subscribe(notifyCOMMIT_SELL)
-	// defer close(commitChan)
 	cancelChan := mb.Subscribe(notifyCANCEL_SELL)
-	// defer close(cancelChan)
 	select {
 	case n := <-commitChan:
 		if n.Userid == s.userId {
@@ -417,7 +413,7 @@ type COMMIT_SELL struct {
 
 // TODO assert timeframe
 func (s *COMMIT_SELL) Prerequsite(mb *MessageBus) error {
-	ch := mb.Subscribe(notifyBUY)
+	ch := mb.Subscribe(notifySELL)
 
 	for n := range ch {
 		if n.Userid == s.userId {
@@ -432,12 +428,19 @@ func (s *COMMIT_SELL) Prerequsite(mb *MessageBus) error {
 // TODO
 func (s COMMIT_SELL) Execute(ch chan *Transaction) error {
 	// TODO get these values
-	ch <- &Transaction{Transaction_id: "ID_1", User_id: s.userId, Command: notifyCOMMIT_SELL, Stock_id: *s.sell.Stock, Stock_price: 24.5, Cash_value: 600.0}
+	ch <- &Transaction{
+		Transaction_id: "ID_1",
+		User_id:        s.userId,
+		Command:        notifyCOMMIT_SELL,
+		Stock_id:       *s.sell.Stock,
+		Stock_price:    24.5,
+		Cash_value:     600.0,
+	}
 	return nil
 }
 
 func (s COMMIT_SELL) Notify(mb *MessageBus) {
-	mb.Publish(notifyCOMMIT_BUY, Notification{
+	mb.Publish(notifyCOMMIT_SELL, Notification{
 		Timestamp: time.Now(),
 		Userid:    s.userId,
 		Stock:     s.sell.Stock,
@@ -460,8 +463,8 @@ func (b COMMIT_SELL) Postrequsite(mb *MessageBus) error {
 //
 // Post-Conditions:
 //
-//		The last SELL command is canceled and any allocated system
-//	    resources are reset and released.
+//	The last SELL command is canceled and any allocated system
+//	resources are reset and released.
 //
 // Example:
 //
@@ -470,42 +473,20 @@ func (b COMMIT_SELL) Postrequsite(mb *MessageBus) error {
 // TODO
 func main() {
 	{
+		ch := make(chan *Transaction)
+		go func() {
+			for c := range ch {
+				log.Println("Transaction commited for", c.Command)
+			}
+		}()
+
 		mb := NewMessageBus()
 		addcmd := ADD{userId: "me", amount: 32.1}
 		buycmd := BUY{userId: "me", stock: "ABC", cost: 32.1, amount: 1.0}
 		buycmd_cmt := &COMMIT_BUY{userId: "me"}
-		// buycmd_cncl := &CANCEL_BUY{userId: "me"}
-		// sellcmt := &COMMIT_SELL{userId: "me"}
-		// sellcmd := SELL{userId: "me", stock: "ABC", cost: 32.1, amount: 1.0}
-		// go Run(&BUY{userId: "me", stock: "ABD", cost: 32.1, amount: 1.0}, mb)
-		go Run(addcmd, mb)
-		go Run(buycmd, mb)
-		// go Run(sellcmt, mb)
-		// go Run(sellcmd, mb)
-		go Run(buycmd_cmt, mb)
-		// go func() {
-		// 	Run(buycmd_cncl, mb)
-		// }()
-		// go Run(&COMMIT_BUY{userId: "me"}, mb)
+		go Run(addcmd, mb, ch)
+		go Run(buycmd, mb, ch)
+		go Run(buycmd_cmt, mb, ch)
 
 	}
-	// 	mb := NewMessageBus()
-	// addcmd := ADD{userId: "me", amount: 32.1}
-	// buycmd := BUY{userId: "me", stock: "ABC", cost: 32.1, amount: 1.0}
-	// buycmd_cmt := &COMMIT_BUY{userId: "me"}
-	// buycmd_cncl := &CANCEL_BUY{userId: "me"}
-	// finch := make(chan error)
-	// go Run(addcmd, mb)
-	// go Run(buycmd, mb)
-	// sellcmt := &COMMIT_SELL{userId: "me"}
-	// go Run(sellcmt, mb)
-	// sellcmd := SELL{userId: "me", stock: "ABC", cost: 32.1, amount: 1.0}
-	// go Run(sellcmd, mb)
-	// go func() {
-	// 	Run(buycmd_cmt, mb)
-	// 	go Run(&BUY{userId: "me", stock: "ABD", cost: 32.1, amount: 1.0}, mb)
-	// 	Run(buycmd_cncl, mb)
-	// 	finch <- nil
-	// }()
-	// <-finch
 }
