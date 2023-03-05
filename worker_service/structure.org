@@ -1,0 +1,21 @@
+- Message bus
+  - send message of type for user
+  - add listeners
+  - return backlog
+- Commands
+  - has a prerequisite
+  - has a post requisite
+  - notification (to notify that something has been executed)
+  - and a way to execute the command
+- When constructing a command
+  - it's prerequisite is run
+  - then it's execute() is ran
+  - finally it's post requisite is ran
+- Prerequisite
+  - Registers it's self in the message bus
+  - Then checks if the prerequisite has already occurred
+
+- Transactions outside of the worker are all done over a single
+  channel to access the websocket.
+  - This way we won't have multiple workers using the websocket at the same time
+  - Results can be broadcasted over the message bus
