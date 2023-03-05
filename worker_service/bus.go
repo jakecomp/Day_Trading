@@ -14,28 +14,31 @@ type Notification struct {
 
 type MessageBus struct {
 	subscriptions map[string][]chan Notification
-	backlog       map[string][]Notification
+	backlog       map[string]map[userid]*Notification
 	lock          sync.Mutex
 }
 
 func NewMessageBus() *MessageBus {
 	return &MessageBus{
 		subscriptions: make(map[string][]chan Notification),
-		backlog:       make(map[string][]Notification),
+		backlog:       make(map[string]map[userid]*Notification),
 	}
 }
 
-func (mb *MessageBus) Subscribe(topic string) chan Notification {
+func (mb *MessageBus) Subscribe(topic string, uid userid) chan Notification {
 	mb.lock.Lock()
 	defer mb.lock.Unlock()
 
 	ch := make(chan Notification)
 	mb.subscriptions[topic] = append(mb.subscriptions[topic], ch)
+
+	if mb.backlog[topic] == nil {
+		mb.backlog[topic] = make(map[userid]*Notification)
+	}
+	msg := mb.backlog[topic][uid]
 	go func() {
-		if mb.backlog[topic] != nil {
-			for _, message := range mb.backlog[topic] {
-				ch <- message
-			}
+		if msg != nil {
+			ch <- *msg
 		}
 	}()
 
@@ -51,7 +54,11 @@ func (mb *MessageBus) Publish(topic string, message Notification) {
 			c <- message
 		}(ch)
 	}
-	mb.backlog[topic] = append(mb.backlog[topic], message)
+
+	if mb.backlog[topic] == nil {
+		mb.backlog[topic] = make(map[userid]*Notification)
+	}
+	mb.backlog[topic][userid(message.Userid)] = &message
 }
 
 // func main() {

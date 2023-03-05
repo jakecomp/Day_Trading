@@ -102,18 +102,6 @@ func (a ADD) Execute(ch chan *Transaction) error {
 
 // TODO
 func (a ADD) Postrequsite(mb *MessageBus) error {
-	// ch := mb.Subscribe(notifyBALANCE)
-	// mb.Publish(notifyGET_BALANCE, Notification{Timestamp: time.Now(), Userid: a.userId})
-	// for n := range ch {
-	// 	if n.Userid == a.userId {
-	// 		if *n.Amount > a.amount {
-	// 			return errors.New("Not enough money for this stock")
-	// 		} else {
-	// 			return nil
-	// 		}
-	// 	}
-	// }
-	// return errors.New("Balance Channel Prematurely Closed")
 	return nil
 }
 
@@ -145,7 +133,8 @@ type BUY struct {
 // if invalid balance return an error describing this
 func (b BUY) Prerequsite(mb *MessageBus) error {
 	// TODO determine how to lookup user balance
-	ch := mb.Subscribe(notifyADD)
+	// TODO get the current price of that stock
+	ch := mb.Subscribe(notifyADD, userid(b.userId))
 	// TODO or balance
 	for n := range ch {
 		if n.Userid == b.userId {
@@ -176,8 +165,8 @@ func (b BUY) Notify(mb *MessageBus) {
 
 func (b BUY) Postrequsite(mb *MessageBus) error {
 	// TODO determine how to lookup user balance
-	commitChan := mb.Subscribe(notifyCOMMIT_BUY)
-	cancelChan := mb.Subscribe(notifyCANCEL_BUY)
+	commitChan := mb.Subscribe(notifyCOMMIT_BUY, userid(b.userId))
+	cancelChan := mb.Subscribe(notifyCANCEL_BUY, userid(b.userId))
 
 	select {
 	case n := <-commitChan:
@@ -204,9 +193,9 @@ func (b BUY) Postrequsite(mb *MessageBus) error {
 //
 // Post-Conditions:
 //
-//		(a) the user's cash account is decreased by the amount user to
-//		purchase the stock
-//		(b) the user's account for the given stock is increased by the
+//	(a) the user's cash account is decreased by the amount user to
+//	    purchase the stock
+//	(b) the user's account for the given stock is increased by the
 //	    purchase amount
 //
 // Example:
@@ -219,8 +208,11 @@ type COMMIT_BUY struct {
 }
 
 // TODO Only take from the backlog
+// TODO assert that it is within the last 60 seconds
+//
+//	and not later than when the commit was requested
 func (b *COMMIT_BUY) Prerequsite(mb *MessageBus) error {
-	ch := mb.Subscribe(notifyBUY)
+	ch := mb.Subscribe(notifyBUY, userid(b.userId))
 
 	for n := range ch {
 		if n.Userid == b.userId {
@@ -284,7 +276,7 @@ type CANCEL_BUY struct {
 
 // TODO Only take from the backlog
 func (b *CANCEL_BUY) Prerequsite(mb *MessageBus) error {
-	ch := mb.Subscribe(notifyBUY)
+	ch := mb.Subscribe(notifyBUY, userid(b.userId))
 
 	for n := range ch {
 		if n.Userid == b.userId {
@@ -344,7 +336,7 @@ type SELL struct {
 // TODO
 func (s SELL) Prerequsite(mb *MessageBus) error {
 	// Wait for the user to buy this stock
-	ch := mb.Subscribe(notifyCOMMIT_BUY)
+	ch := mb.Subscribe(notifyCOMMIT_BUY, userid(s.userId))
 
 	for n := range ch {
 		if n.Userid == s.userId {
@@ -372,8 +364,8 @@ func (s SELL) Notify(mb *MessageBus) {
 
 func (s SELL) Postrequsite(mb *MessageBus) error {
 	// TODO determine how to lookup user balance
-	commitChan := mb.Subscribe(notifyCOMMIT_SELL)
-	cancelChan := mb.Subscribe(notifyCANCEL_SELL)
+	commitChan := mb.Subscribe(notifyCOMMIT_SELL, userid(s.userId))
+	cancelChan := mb.Subscribe(notifyCANCEL_SELL, userid(s.userId))
 	select {
 	case n := <-commitChan:
 		if n.Userid == s.userId {
@@ -413,7 +405,7 @@ type COMMIT_SELL struct {
 
 // TODO assert timeframe
 func (s *COMMIT_SELL) Prerequsite(mb *MessageBus) error {
-	ch := mb.Subscribe(notifySELL)
+	ch := mb.Subscribe(notifySELL, userid(s.userId))
 
 	for n := range ch {
 		if n.Userid == s.userId {
@@ -470,7 +462,7 @@ func (b COMMIT_SELL) Postrequsite(mb *MessageBus) error {
 //
 //	CANCEL_SELL,jsmith
 //
-// TODO
+// TODO implement cancelation
 func main() {
 	{
 		ch := make(chan *Transaction)
