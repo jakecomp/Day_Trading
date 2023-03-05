@@ -274,7 +274,6 @@ type CANCEL_BUY struct {
 	buy    Notification
 }
 
-// TODO Only take from the backlog
 func (b *CANCEL_BUY) Prerequsite(mb *MessageBus) error {
 	ch := mb.Subscribe(notifyBUY, userid(b.userId))
 
@@ -288,7 +287,6 @@ func (b *CANCEL_BUY) Prerequsite(mb *MessageBus) error {
 
 }
 
-// TODO
 func (b CANCEL_BUY) Execute(ch chan *Transaction) error {
 	return nil
 }
@@ -333,7 +331,6 @@ type SELL struct {
 }
 
 // TODO check amount of stock held by user
-// TODO
 func (s SELL) Prerequsite(mb *MessageBus) error {
 	// Wait for the user to buy this stock
 	ch := mb.Subscribe(notifyCOMMIT_BUY, userid(s.userId))
@@ -461,8 +458,6 @@ func (b COMMIT_SELL) Postrequsite(mb *MessageBus) error {
 // Example:
 //
 //	CANCEL_SELL,jsmith
-//
-// TODO implement cancelation
 type CANCEL_SELL struct {
 	userId string
 	sell   Notification
@@ -482,7 +477,6 @@ func (s *CANCEL_SELL) Prerequsite(mb *MessageBus) error {
 
 }
 
-// TODO
 func (s CANCEL_SELL) Execute(ch chan *Transaction) error {
 	return nil
 }
