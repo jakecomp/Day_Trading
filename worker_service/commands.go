@@ -432,7 +432,7 @@ func (s COMMIT_SELL) Execute(ch chan *Transaction) error {
 }
 
 func (s COMMIT_SELL) Notify(mb *MessageBus) {
-	mb.Publish(notifyCANCEL_SELL, Notification{
+	mb.Publish(notifyCOMMIT_SELL, Notification{
 		Timestamp: time.Now(),
 		Userid:    s.userId,
 		Stock:     s.sell.Stock,

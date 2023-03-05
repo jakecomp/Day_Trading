@@ -77,6 +77,32 @@ func TestCommandsSELLCommit(t *testing.T) {
 	}
 }
 
+func TestCommandsSELLCancel(t *testing.T) {
+	ch := make(chan *Transaction)
+	mb := NewMessageBus()
+	finch := make(chan error)
+
+	go Run(ADD{userId: "me", amount: 32.1}, mb, ch)
+	go Run(BUY{userId: "me", stock: "ABC", cost: 32.1, amount: 1.0}, mb, ch)
+	go Run(&COMMIT_BUY{userId: "me"}, mb, ch)
+	go Run(SELL{userId: "me", stock: "ABC", cost: 33.1, amount: 1.0}, mb, ch)
+	go func() {
+		Run(&CANCEL_SELL{userId: "me"}, mb, ch)
+		finch <- nil
+	}()
+	sell := []*Transaction{<-ch, <-ch}
+	if sell[0].Command != notifyADD {
+		t.Fatalf("This transaction should have been an ADD %v", sell[0].Command)
+	}
+	if sell[1].Command != notifyCOMMIT_BUY {
+		t.Fatalf("This transaction should have been an COMMIT_BUY %v", sell[1].Command)
+	}
+	err := <-finch
+	if err != nil {
+		t.Fail()
+	}
+}
+
 func TestCommandsSELLCommitMultiUser(t *testing.T) {
 	ch := make(chan *Transaction)
 	mb := NewMessageBus()

@@ -22,7 +22,6 @@ type filename string
 type Args []string
 type report string
 
-// TODO
 func dispatch(cmd Command) {
 	funcLookup := map[string]func(Command) CMD{
 		"ADD": func(cmd Command) CMD {
