@@ -32,6 +32,8 @@ func (mb *MessageBus) Subscribe(topic string, uid userid) chan Notification {
 	ch := make(chan Notification)
 	mb.subscriptions[topic] = append(mb.subscriptions[topic], ch)
 
+	// Notify this new subscription of the last broadcasted
+	// notification on this topic
 	if mb.backlog[topic] == nil {
 		mb.backlog[topic] = make(map[userid]*Notification)
 	}
@@ -55,6 +57,7 @@ func (mb *MessageBus) Publish(topic string, message Notification) {
 		}(ch)
 	}
 
+	// Backup the latest notification to update subscribers
 	if mb.backlog[topic] == nil {
 		mb.backlog[topic] = make(map[userid]*Notification)
 	}

@@ -432,7 +432,7 @@ func (s COMMIT_SELL) Execute(ch chan *Transaction) error {
 }
 
 func (s COMMIT_SELL) Notify(mb *MessageBus) {
-	mb.Publish(notifyCOMMIT_SELL, Notification{
+	mb.Publish(notifyCANCEL_SELL, Notification{
 		Timestamp: time.Now(),
 		Userid:    s.userId,
 		Stock:     s.sell.Stock,
@@ -463,6 +463,44 @@ func (b COMMIT_SELL) Postrequsite(mb *MessageBus) error {
 //	CANCEL_SELL,jsmith
 //
 // TODO implement cancelation
+type CANCEL_SELL struct {
+	userId string
+	sell   Notification
+}
+
+// TODO assert timeframe
+func (s *CANCEL_SELL) Prerequsite(mb *MessageBus) error {
+	ch := mb.Subscribe(notifySELL, userid(s.userId))
+
+	for n := range ch {
+		if n.Userid == s.userId {
+			s.sell = n
+			return nil
+		}
+	}
+	return errors.New("Balance Channel Prematurely Closed")
+
+}
+
+// TODO
+func (s CANCEL_SELL) Execute(ch chan *Transaction) error {
+	return nil
+}
+
+func (s CANCEL_SELL) Notify(mb *MessageBus) {
+	mb.Publish(notifyCANCEL_SELL, Notification{
+		Timestamp: time.Now(),
+		Userid:    s.userId,
+		Stock:     s.sell.Stock,
+		Amount:    s.sell.Amount,
+	})
+}
+
+// TODO
+func (b CANCEL_SELL) Postrequsite(mb *MessageBus) error {
+	return nil
+}
+
 func main() {
 	{
 		ch := make(chan *Transaction)

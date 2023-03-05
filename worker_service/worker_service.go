@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -22,20 +23,35 @@ type Args []string
 type report string
 
 // TODO
-// func dispatch(cmd Command) {
-// 	funcLookup := map[string]func(Command) (*report, error){
-// 		"ADD":             add,
-// 		"BUY":             buy,
-// 		"COMMIT_BUY":      commit_buy,
-// 		"CANCEL_BUY":      cancel_buy,
-// 		"SELL":            sell,
-// 		"COMMIT_SELL":     commit_sell,
-// 		"CANCEL_SELL":     cancel_sell,
-// 		"DUMPLOG":         dumplog,
-// 		"DISPLAY_SUMMARY": display_summary,
-// 	}
-// 	funcLookup[cmd.Command](cmd)
-// }
+func dispatch(cmd Command) {
+	funcLookup := map[string]func(Command) CMD{
+		"ADD": func(cmd Command) CMD {
+			a, _ := strconv.ParseFloat(cmd.Args[1], 64)
+			return ADD{userId: cmd.Args[0], amount: a}
+		},
+		"BUY": func(cmd Command) CMD {
+			a, _ := strconv.ParseFloat(cmd.Args[1], 64)
+			return BUY{userId: cmd.Args[0], stock: cmd.Args[1], amount: a, cost: 0}
+		},
+		"COMMIT_BUY": func(cmd Command) CMD {
+			return &COMMIT_BUY{userId: cmd.Args[0]}
+		},
+		"CANCEL_BUY": func(cmd Command) CMD {
+			return &CANCEL_BUY{userId: cmd.Args[0]}
+		},
+		"SELL": func(cmd Command) CMD {
+			a, _ := strconv.ParseFloat(cmd.Args[1], 64)
+			return &SELL{userId: cmd.Args[0], stock: cmd.Args[1], amount: a, cost: 0}
+		},
+		"COMMIT_SELL": func(cmd Command) CMD {
+			return &COMMIT_SELL{userId: cmd.Args[0]}
+		},
+		"CANCEL_SELL": func(cmd Command) CMD {
+			return &CANCEL_SELL{userId: cmd.Args[0]}
+		},
+	}
+	funcLookup[cmd.Command](cmd)
+}
 
 type Message struct {
 	Command string
