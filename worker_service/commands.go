@@ -1,5 +1,14 @@
 package main
 
+// TODO Add a way to lookup a users balance
+// used for pre req for buy and sell
+// used for post req for commit commands
+// TODO Pass these transactions over the websocket
+// TODO Add a way to lookup a stock value
+// used for selling and buying
+// TODO assert timeframe for commit and cancel commands
+// TODO restrict some commands to only look at the backlog (commit and cancel)
+// TODO generate transaction IDs
 import (
 	"errors"
 	"fmt"
@@ -100,7 +109,6 @@ func (a ADD) Execute(ch chan *Transaction) error {
 	return nil
 }
 
-// TODO
 func (a ADD) Postrequsite(mb *MessageBus) error {
 	return nil
 }
@@ -132,10 +140,7 @@ type BUY struct {
 // lookup user balance
 // if invalid balance return an error describing this
 func (b BUY) Prerequsite(mb *MessageBus) error {
-	// TODO determine how to lookup user balance
-	// TODO get the current price of that stock
 	ch := mb.Subscribe(notifyADD, userid(b.userId))
-	// TODO or balance
 	for n := range ch {
 		if n.Userid == b.userId {
 			if *n.Amount < b.cost {
@@ -164,7 +169,6 @@ func (b BUY) Notify(mb *MessageBus) {
 }
 
 func (b BUY) Postrequsite(mb *MessageBus) error {
-	// TODO determine how to lookup user balance
 	commitChan := mb.Subscribe(notifyCOMMIT_BUY, userid(b.userId))
 	cancelChan := mb.Subscribe(notifyCANCEL_BUY, userid(b.userId))
 
@@ -207,10 +211,6 @@ type COMMIT_BUY struct {
 	buy    Notification
 }
 
-// TODO Only take from the backlog
-// TODO assert that it is within the last 60 seconds
-//
-//	and not later than when the commit was requested
 func (b *COMMIT_BUY) Prerequsite(mb *MessageBus) error {
 	ch := mb.Subscribe(notifyBUY, userid(b.userId))
 
@@ -224,9 +224,7 @@ func (b *COMMIT_BUY) Prerequsite(mb *MessageBus) error {
 
 }
 
-// TODO
 func (b COMMIT_BUY) Execute(ch chan *Transaction) error {
-	// TODO get these values
 	ch <- &Transaction{
 		Transaction_id: "ID_1",
 		User_id:        b.userId,
@@ -247,7 +245,6 @@ func (b COMMIT_BUY) Notify(mb *MessageBus) {
 	})
 }
 
-// TODO
 func (b COMMIT_BUY) Postrequsite(mb *MessageBus) error {
 	return nil
 }
@@ -300,9 +297,7 @@ func (b CANCEL_BUY) Notify(mb *MessageBus) {
 	})
 }
 
-// TODO
 func (b CANCEL_BUY) Postrequsite(mb *MessageBus) error {
-	// TODO determine how to lookup user balance
 	return nil
 }
 
@@ -330,7 +325,6 @@ type SELL struct {
 	cost   float64
 }
 
-// TODO check amount of stock held by user
 func (s SELL) Prerequsite(mb *MessageBus) error {
 	// Wait for the user to buy this stock
 	ch := mb.Subscribe(notifyCOMMIT_BUY, userid(s.userId))
@@ -400,7 +394,6 @@ type COMMIT_SELL struct {
 	sell   Notification
 }
 
-// TODO assert timeframe
 func (s *COMMIT_SELL) Prerequsite(mb *MessageBus) error {
 	ch := mb.Subscribe(notifySELL, userid(s.userId))
 
@@ -414,9 +407,7 @@ func (s *COMMIT_SELL) Prerequsite(mb *MessageBus) error {
 
 }
 
-// TODO
 func (s COMMIT_SELL) Execute(ch chan *Transaction) error {
-	// TODO get these values
 	ch <- &Transaction{
 		Transaction_id: "ID_1",
 		User_id:        s.userId,
@@ -437,7 +428,6 @@ func (s COMMIT_SELL) Notify(mb *MessageBus) {
 	})
 }
 
-// TODO
 func (b COMMIT_SELL) Postrequsite(mb *MessageBus) error {
 	return nil
 }
@@ -463,7 +453,6 @@ type CANCEL_SELL struct {
 	sell   Notification
 }
 
-// TODO assert timeframe
 func (s *CANCEL_SELL) Prerequsite(mb *MessageBus) error {
 	ch := mb.Subscribe(notifySELL, userid(s.userId))
 
@@ -490,7 +479,6 @@ func (s CANCEL_SELL) Notify(mb *MessageBus) {
 	})
 }
 
-// TODO
 func (b CANCEL_SELL) Postrequsite(mb *MessageBus) error {
 	return nil
 }
