@@ -18,21 +18,27 @@ type Transaction struct {
 	Cash_value     float32
 }
 
+type command struct {
+	Ticket  int
+	Command string
+	Args    []string
+}
+
 type Message struct {
 	Command string
-	Data    *Transaction
+	Data    *command
 }
 
 var upgrader = websocket.Upgrader{}
-var transactionQueue = make([]Transaction, 0)
+var transactionQueue = make([]command, 0)
 
-func enqueue(queue []Transaction, element Transaction) []Transaction {
+func enqueue(queue []command, element command) []command {
 	queue = append(queue, element)
 	fmt.Println("Enqueued:", element)
 	return queue
 }
 
-func dequeue(queue []Transaction) (*Transaction, []Transaction) {
+func dequeue(queue []command) (*command, []command) {
 
 	if len(queue) == 0 {
 		return nil, queue
@@ -40,7 +46,7 @@ func dequeue(queue []Transaction) (*Transaction, []Transaction) {
 
 	element := &queue[0]
 	if len(queue) == 1 {
-		var tmp = []Transaction{}
+		var tmp = []command{}
 		return element, tmp
 	}
 
@@ -65,7 +71,7 @@ func socketHandler(w http.ResponseWriter, r *http.Request) {
 func socketReader(conn *websocket.Conn) {
 	// Event Loop, Handle Comms in here
 	var message Message
-	var transaction *Transaction
+	var transaction *command
 	for {
 		messageType, msg, err := conn.ReadMessage()
 		if err != nil {
@@ -108,7 +114,8 @@ func socketReader(conn *websocket.Conn) {
 
 func handleRequests() {
 	http.HandleFunc("/ws", socketHandler)
-	log.Fatal(http.ListenAndServe("10.9.0.7:8001", nil))
+	//log.Fatal(http.ListenAndServe("10.9.0.7:8001", nil))
+	log.Fatal(http.ListenAndServe("localhost:8001", nil))
 }
 
 func main() {

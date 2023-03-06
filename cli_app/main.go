@@ -6,13 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/gorilla/websocket"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
+
+	"github.com/gorilla/websocket"
 )
 
 type Command struct {
@@ -156,7 +157,6 @@ func main() {
 
 	c := connectToSocket(tok)
 	defer c.Close()
-
 	scanner := bufio.NewReader(os.Stdin)
 	forwardCommands(parseCmds(scanner), c)
 	os.Exit(1)
