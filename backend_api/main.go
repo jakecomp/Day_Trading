@@ -175,16 +175,23 @@ func socketReader(conn *websocket.Conn) {
 		err = json.Unmarshal(message, cmd)
 		fmt.Println("JSON: ", string(message))
 
-		// BUILD TRANSACTION OBJECT
-		messageToQueue := &Message{"ENQUEUE", cmd}
-		msg, _ := json.Marshal(*messageToQueue)
-		queueServiceConn.WriteMessage(messageType, msg)
+		// Check if should queue item
+		if cmd.Command == "DUMPLOG" {
+			fmt.Printf("DUMPLOG FOUND")
+		} else if cmd.Command == "QUOTE" {
+			fmt.Printf("QUOTE FOUND")
+		} else {
+			messageToQueue := &Message{"ENQUEUE", cmd}
+			msg, _ := json.Marshal(*messageToQueue)
+			queueServiceConn.WriteMessage(messageType, msg)
+		}
 
 		if err != nil {
 			fmt.Println("Error during message writing:", err)
 			break
 		}
 
+		// This Should return success or failure eventually
 		err = conn.WriteMessage(messageType, message)
 		if err != nil {
 			fmt.Println("Error during message writing:", err)
