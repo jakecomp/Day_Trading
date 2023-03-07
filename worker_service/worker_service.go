@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"strconv"
 	"time"
 
@@ -173,13 +174,15 @@ func getNextCommand(conn *websocket.Conn) (*Message, error) {
 }
 
 func main() {
-	// docker := "10.9.0.7"
-	local := "localhost"
-	queueServiceConn, _, _ := websocket.DefaultDialer.Dial("ws://"+local+":8001/ws?", nil)
+	// Determin if we should use local host
+	var host string
+	if len(os.Args) > 1 {
+		host = "localhost"
+	} else {
+		host = "10.9.0.7"
+	}
+	queueServiceConn, _, _ := websocket.DefaultDialer.Dial("ws://"+host+":8001/ws?", nil)
 	fmt.Println("Worker Service Starting...")
-
-	ch := make(chan *Transaction)
-	mb := NewMessageBus()
 
 	// These are just here as an example of what the queue server
 	// could be getting on the other end for the worker to preform
@@ -198,13 +201,23 @@ func main() {
 			log.Fatal(err)
 		}
 	}
+
+	ch := make(chan *Transaction)
+	mb := NewMessageBus()
 	for {
 		select {
 		case tra := <-ch:
 			err := pushCommand(
 				queueServiceConn,
-				// TODO Determine how we want to indicate that his command is now ready to be executed by the backend service
-				&Command{4, "COMPLETED_TANSACTION", Args{tra.User_id, tra.Command}},
+				// TODO Determine how we want to
+				// indicate that his command is now
+				// ready to be executed by the backend
+				// service
+				&Command{
+					4,
+					"COMPLETED_TANSACTION",
+					Args{tra.User_id, tra.Command},
+				},
 			)
 			if err != nil {
 				log.Fatal(err)
