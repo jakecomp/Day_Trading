@@ -1,0 +1,60 @@
+<user_log ticketnumber="69">
+	<UserCommand></UserCommand>
+	<Timestamp>1678177779</Timestamp>
+	<username>Dog</username>
+	<funds>1432</funds>
+</user_log><user_log ticketnumber="69">
+	<UserCommand></UserCommand>
+	<Timestamp>1678178099</Timestamp>
+	<username>Dog</username>
+	<funds>1432</funds>
+</user_log><user_log ticketnumber="69">
+	<UserCommand></UserCommand>
+	<Timestamp>1678178188</Timestamp>
+	<username>Dog</username>
+	<funds>1432</funds>
+</user_log><user_log>
+	<UserCommand></UserCommand>
+	<Timestamp>1678178253</Timestamp>
+	<username>Dog</username>
+	<funds>1432</funds>
+	<ticketnumber>69</ticketnumber>
+</user_log><user_log>
+	<userCommand></userCommand>
+	<timestamp>1678178327</timestamp>
+	<username>Dog</username>
+	<funds>1432</funds>
+	<ticketnumber>69</ticketnumber>
+</user_log><user_log>
+	<userCommand></userCommand>
+	<timestamp>1678178439</timestamp>
+	<username>Dog</username>
+	<funds>1432</funds>
+	<ticketnumber>69</ticketnumber>
+</user_log>
+<user_log>
+
+	<userCommand></userCommand>
+
+	<timestamp>1678178474</timestamp>
+
+	<username>Dog</username>
+
+	<funds>1432</funds>
+
+	<ticketnumber>69</ticketnumber>
+
+</user_log><user_log>
+	<userCommand></userCommand>
+	<timestamp>1678178539</timestamp>
+	<username>Dog</username>
+	<funds>1432</funds>
+	<ticketnumber>80</ticketnumber>
+</user_log>
+<user_log>
+	<userCommand></userCommand>
+	<timestamp>1678178553</timestamp>
+	<username>Dog</username>
+	<funds>1432</funds>
+	<ticketnumber>80</ticketnumber>
+</user_log>
