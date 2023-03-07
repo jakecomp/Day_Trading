@@ -482,23 +482,3 @@ func (s CANCEL_SELL) Notify(mb *MessageBus) {
 func (b CANCEL_SELL) Postrequsite(mb *MessageBus) error {
 	return nil
 }
-
-func main() {
-	{
-		ch := make(chan *Transaction)
-		go func() {
-			for c := range ch {
-				log.Println("Transaction commited for", c.Command)
-			}
-		}()
-
-		mb := NewMessageBus()
-		addcmd := ADD{userId: "me", amount: 32.1}
-		buycmd := BUY{userId: "me", stock: "ABC", cost: 32.1, amount: 1.0}
-		buycmd_cmt := &COMMIT_BUY{userId: "me"}
-		go Run(addcmd, mb, ch)
-		go Run(buycmd, mb, ch)
-		go Run(buycmd_cmt, mb, ch)
-
-	}
-}
