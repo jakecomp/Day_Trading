@@ -77,20 +77,20 @@ func main() {
 	fmt.Println("Running on Port number: 8004")
 
 	//	errorlog("hello")
-	recive_log := &user_log{
-		//XmlName:      xml.Name{},
-		Timestamp:    0,
-		Username:     "Dog",
-		Funds:        "1432",
-		Ticketnumber: 80,
-		Command:      []string{},
-	}
-	//recive_log.XmlName.Local = "UserCommand"
-	recive_log.Timestamp = timestamp()
-	out, _ := xml.MarshalIndent(recive_log, "", "\t")
-	fmt.Println(string(out))
-	f.WriteString(string(out))
-	f.WriteString("\n")
+	// recive_log := &user_log{
+	// 	//XmlName:      xml.Name{},
+	// 	Timestamp:    0,
+	// 	Username:     "Dog",
+	// 	Funds:        "1432",
+	// 	Ticketnumber: 80,
+	// 	Command:      []string{},
+	// }
+	// //recive_log.XmlName.Local = "UserCommand"
+	// recive_log.Timestamp = timestamp()
+	// out, _ := xml.MarshalIndent(recive_log, "", "\t")
+	// fmt.Println(string(out))
+	// f.WriteString(string(out))
+	// f.WriteString("\n")
 	handleRequests()
 	//fmt.Println("'yes'")
 	f.Close()
