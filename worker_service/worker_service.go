@@ -26,38 +26,38 @@ type Args []string
 type report string
 
 func dispatch(cmd Command) (CMD, error) {
-	funcLookup := map[string]func(Command) CMD{
-		"ADD": func(cmd Command) CMD {
+	fmt.Println("in dispatch command is ", cmd.Command, cmd.Args)
+	funcLookup := map[string]func(Command) (CMD, error){
+		"ADD": func(cmd Command) (CMD, error) {
+			a, err := strconv.ParseFloat(cmd.Args[1], 64)
+			return ADD{userId: cmd.Args[0], amount: a}, err
+		},
+		"BUY": func(cmd Command) (CMD, error) {
+			a, err := strconv.ParseFloat(cmd.Args[2], 64)
+			return BUY{userId: cmd.Args[0], stock: cmd.Args[1], amount: a, cost: 0}, err
+		},
+		"COMMIT_BUY": func(cmd Command) (CMD, error) {
+			return &COMMIT_BUY{userId: cmd.Args[0]}, nil
+		},
+		"CANCEL_BUY": func(cmd Command) (CMD, error) {
+			return &CANCEL_BUY{userId: cmd.Args[0]}, nil
+		},
+		"SELL": func(cmd Command) (CMD, error) {
 			a, _ := strconv.ParseFloat(cmd.Args[1], 64)
-			return ADD{userId: cmd.Args[0], amount: a}
+			return &SELL{userId: cmd.Args[0], stock: cmd.Args[1], amount: a, cost: 0}, nil
 		},
-		"BUY": func(cmd Command) CMD {
-			a, _ := strconv.ParseFloat(cmd.Args[1], 64)
-			return BUY{userId: cmd.Args[0], stock: cmd.Args[1], amount: a, cost: 0}
+		"COMMIT_SELL": func(cmd Command) (CMD, error) {
+			return &COMMIT_SELL{userId: cmd.Args[0]}, nil
 		},
-		"COMMIT_BUY": func(cmd Command) CMD {
-			return &COMMIT_BUY{userId: cmd.Args[0]}
-		},
-		"CANCEL_BUY": func(cmd Command) CMD {
-			return &CANCEL_BUY{userId: cmd.Args[0]}
-		},
-		"SELL": func(cmd Command) CMD {
-			a, _ := strconv.ParseFloat(cmd.Args[1], 64)
-			return &SELL{userId: cmd.Args[0], stock: cmd.Args[1], amount: a, cost: 0}
-		},
-		"COMMIT_SELL": func(cmd Command) CMD {
-			return &COMMIT_SELL{userId: cmd.Args[0]}
-		},
-		"CANCEL_SELL": func(cmd Command) CMD {
-			return &CANCEL_SELL{userId: cmd.Args[0]}
+		"CANCEL_SELL": func(cmd Command) (CMD, error) {
+			return &CANCEL_SELL{userId: cmd.Args[0]}, nil
 		},
 	}
 	f := funcLookup[cmd.Command]
 	if f == nil {
-		log.Println()
 		return nil, errors.New("Undefinined command" + cmd.Command)
 	}
-	return funcLookup[cmd.Command](cmd), nil
+	return funcLookup[cmd.Command](cmd)
 }
 
 type Message struct {
@@ -124,7 +124,7 @@ func pushCommand(conn *websocket.Conn, t *Command) error {
 	message := &Message{"ENQUEUE", t}
 	msg, _ := json.Marshal(*message)
 
-	fmt.Println("MSG: ", string(msg))
+	// fmt.Println("MSG: ", string(msg))
 	err := conn.WriteMessage(websocket.TextMessage, msg)
 	if err != nil {
 		return err
@@ -137,21 +137,20 @@ func pushCommand(conn *websocket.Conn, t *Command) error {
 }
 
 func getNextCommand(conn *websocket.Conn) (*Message, error) {
-	log.Println("Dequeueing")
 	for {
 		// Attempt Dequeue
 		message := &Message{"DEQUEUE", nil}
 		msg, err := json.Marshal(message)
 		err = conn.WriteMessage(websocket.TextMessage, msg)
 
-		_, msg, err = conn.ReadMessage()
+		_, resp, err := conn.ReadMessage()
 		if err != nil {
 			return nil, err
 		}
 
-		fmt.Println("MSG: ", string(msg))
+		fmt.Println("MSG: ", string(resp))
 
-		err = json.Unmarshal(msg, message)
+		err = json.Unmarshal(resp, message)
 
 		fmt.Println("Received: ", message)
 		if message.Command == "SUCCESS" {
@@ -183,12 +182,11 @@ func main() {
 	}
 	queueServiceConn, _, _ := websocket.DefaultDialer.Dial("ws://"+host+":8001/ws?", nil)
 	fmt.Println("Worker Service Starting...")
-
 	// These are just here as an example of what the queue server
 	// could be getting on the other end for the worker to preform
 	commands := []*Command{
 		{1, notifyADD, []string{"USERNAME", "50.5"}},
-		{2, notifyBUY, []string{"USERNAME", "ABC", "24.5", "600.0"}},
+		{2, notifyBUY, []string{"USERNAME", "XYZ", "24.5", "600.0"}},
 		{3, notifyCOMMIT_BUY, []string{"USERNAME"}},
 	}
 	// Enqueue Tasks
@@ -207,6 +205,7 @@ func main() {
 	for {
 		select {
 		case tra := <-ch:
+			fmt.Println("pushing new transaction ", tra)
 			err := pushCommand(
 				queueServiceConn,
 				// TODO Determine how we want to
@@ -230,7 +229,6 @@ func main() {
 				time.Sleep(time.Millisecond * 100)
 			} else {
 				log.Println("ERROR:", err)
-
 			}
 		}
 
