@@ -70,9 +70,8 @@ func socketHandler(w http.ResponseWriter, r *http.Request) {
 
 func socketReader(conn *websocket.Conn) {
 	// Event Loop, Handle Comms in here
-	var message Message
-	var transaction *command
 	for {
+		var transaction *command
 		messageType, msg, err := conn.ReadMessage()
 		if err != nil {
 			fmt.Println("Error during message reading:", err)
@@ -80,6 +79,8 @@ func socketReader(conn *websocket.Conn) {
 		}
 
 		fmt.Println("Received: ", string(msg))
+
+		var message Message
 		// Message Format: {"Command" : "ENQUEUE" , "Data" : "Transaction{}" }
 		err = json.Unmarshal(msg, &message)
 
