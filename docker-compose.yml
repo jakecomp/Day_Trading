@@ -4,14 +4,62 @@ services:
     build: ./mongodb 
     ports: 
       - "27017:27017"
-      
-  
+    networks:
+      net-10.9.0.0:
+        ipv4_address: 10.9.0.3
+
   backend: 
-    build: ./backend_api 
+    build: ./backend_api
     ports: 
       - "8000:8000" 
+    networks:
+      net-10.9.0.0:
+        ipv4_address: 10.9.0.4
 
   frontend: 
     build: ./frontend 
     ports: 
-      - "3000:3000"
+      - "3000:3000" 
+    networks:
+      net-10.9.0.0:
+        ipv4_address: 10.9.0.5
+
+  quote_server: 
+    build: ./quote_server 
+    ports: 
+      - "8002:8002"
+    networks:
+      net-10.9.0.0:
+        ipv4_address: 10.9.0.6 
+
+  queue_service: 
+    build: ./queue_service 
+    ports: 
+      - "8001:8001" 
+    networks: 
+      net-10.9.0.0: 
+        ipv4_address: 10.9.0.7 
+
+  worker: 
+    build: ./worker_service 
+    ports: 
+      - "8003:8003" 
+    networks: 
+      net-10.9.0.0: 
+        ipv4_address: 10.9.0.8 
+
+  log_service: 
+    build: ./log_service 
+    ports: 
+      - "8004:8004" 
+    networks: 
+      net-10.9.0.0: 
+        ipv4_address: 10.9.0.9
+
+
+networks:
+  net-10.9.0.0:
+    name: net-10.9.0.0
+    ipam:
+      config:
+        - subnet: 10.9.0.0/24

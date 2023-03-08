@@ -24,14 +24,14 @@ export const SignUp = () => {
         }
 
         try {
-            fetch('http://localhost:8000/signup', {
+            fetch('http://10.9.0.4:8000/signup', {
                 method: 'POST',
                 mode: 'no-cors',
                 headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
                 body: JSON.stringify(report),
             })
                 .then((response) => response.json)
-            .then((response) => console.log(response))
+                .then((response) => console.log(response))
                 .then((response) => {
                     console.log('Server Response: ' + response)
                 })

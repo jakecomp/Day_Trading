@@ -18,6 +18,7 @@ import (
 )
 
 var db *mongo.Client
+var queueServiceConn *websocket.Conn
 var upgrader = websocket.Upgrader{}
 
 const database = "day_trading"
@@ -30,6 +31,17 @@ type Credentials struct {
 type user_doc struct {
 	Username string
 	Hash     string
+}
+
+type command struct {
+	Ticket  int
+	Command string
+	Args    []string
+}
+
+type Message struct {
+	Command string
+	Data    *command
 }
 
 func homePage(w http.ResponseWriter, r *http.Request) {
@@ -144,12 +156,14 @@ func socketHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.Close()
-	err = conn.WriteMessage(1, []byte("Hello there"))
+	//err = conn.WriteMessage(1, []byte("Hello there"))
 	socketReader(conn)
 }
 
 func socketReader(conn *websocket.Conn) {
 	// Event Loop, Handle Comms in here
+	log.Println("Waiting for messages...")
+	cmd := &command{0, "NONE", []string{"TEST"}}
 	for {
 		messageType, message, err := conn.ReadMessage()
 		if err != nil {
@@ -158,6 +172,26 @@ func socketReader(conn *websocket.Conn) {
 		}
 		fmt.Printf("Received: %s", string(message))
 
+		err = json.Unmarshal(message, cmd)
+		fmt.Println("JSON: ", string(message))
+
+		// Check if should queue item
+		if cmd.Command == "DUMPLOG" {
+			fmt.Printf("DUMPLOG FOUND")
+		} else if cmd.Command == "QUOTE" {
+			fmt.Printf("QUOTE FOUND")
+		} else {
+			messageToQueue := &Message{"ENQUEUE", cmd}
+			msg, _ := json.Marshal(*messageToQueue)
+			queueServiceConn.WriteMessage(messageType, msg)
+		}
+
+		if err != nil {
+			fmt.Println("Error during message writing:", err)
+			break
+		}
+
+		// This Should return success or failure eventually
 		err = conn.WriteMessage(messageType, message)
 		if err != nil {
 			fmt.Println("Error during message writing:", err)
@@ -181,12 +215,14 @@ func handleRequests() {
 }
 
 func main() {
+	queueServiceConn = connectQueue()
 	fmt.Println("RUNNING ON PORT 8000...")
 	handleRequests()
 }
 
 func connect() (*mongo.Client, context.Context) {
 	clientOptions := options.Client()
+	//clientOptions.ApplyURI("mongodb://admin:admin@10.9.0.3:27017")
 	clientOptions.ApplyURI("mongodb://admin:admin@localhost:27017")
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 	client, err := mongo.Connect(ctx, clientOptions)
@@ -196,6 +232,12 @@ func connect() (*mongo.Client, context.Context) {
 		panic(err)
 	}
 	return client, ctx
+}
+
+func connectQueue() *websocket.Conn {
+	//conn, _, _ := websocket.DefaultDialer.Dial("ws://10.9.0.7:8001/ws?", nil)
+	conn, _, _ := websocket.DefaultDialer.Dial("ws://localhost:8001/ws?", nil)
+	return conn
 }
 
 func hashPassword(password string) string {
