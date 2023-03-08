@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"strconv"
 	"time"
@@ -169,6 +171,14 @@ func getNextCommand(conn *websocket.Conn) (*Message, error) {
 	}
 
 }
+func sendUserLog(u user_log) {
+	ulog, _ := json.Marshal(u)
+	bodyReader := bytes.NewReader(ulog)
+	_, err := http.Post("http://10.9.0.9:8004/userlog", "application/json", bodyReader)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
 
 func main() {
 	// Determin if we should use local host
@@ -203,7 +213,9 @@ func main() {
 	for {
 		select {
 		case tra := <-ch:
-			fmt.Println("pushing new transaction ", tra)
+			fmt.Println("pushing new transaction ", tra.toLog())
+			sendUserLog(tra.toLog())
+
 			// err := pushCommand(
 			// 	queueServiceConn,
 			// 	// TODO Determine how we want to

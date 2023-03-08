@@ -8,7 +8,6 @@ package main
 // used for selling and buying
 // TODO assert timeframe for commit and cancel commands
 import (
-	"encoding/xml"
 	"errors"
 	"fmt"
 	"log"
@@ -17,18 +16,10 @@ import (
 )
 
 type user_log struct {
-	XmlName      xml.Name `xml:"usercommand"`
-	Timestamp    int64    `xml:"timestamp"`
 	Username     string   `xml:"username" json:"username"`
 	Funds        string   `xml:"funds" json:"funds"`
 	Ticketnumber int      `xml:"ticketnumber" json:"ticketnumber"`
 	Command      []string `xml:"command,attr" json:"command"`
-}
-
-func (trans *Transaction) toLog() []byte {
-	if trans.Command == notifyADD {
-
-	}
 }
 
 type Transaction struct {
@@ -38,6 +29,16 @@ type Transaction struct {
 	Stock_id       string
 	Stock_price    float64
 	Cash_value     float64
+}
+
+func (trans *Transaction) toLog() user_log {
+	u := user_log{
+		Username:     trans.User_id,
+		Funds:        fmt.Sprintf("%f", trans.Cash_value),
+		Ticketnumber: int(trans.Transaction_id),
+		Command:      []string{trans.Command},
+	}
+	return u
 }
 
 type CMD interface {
