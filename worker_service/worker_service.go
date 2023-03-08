@@ -148,12 +148,10 @@ func getNextCommand(conn *websocket.Conn) (*Message, error) {
 			return nil, err
 		}
 
-		fmt.Println("MSG: ", string(resp))
-
 		err = json.Unmarshal(resp, message)
 
-		fmt.Println("Received: ", message)
 		if message.Command == "SUCCESS" {
+			fmt.Println("Received: ", message)
 			transaction := message.Data
 			fmt.Println("Command: ", transaction)
 			return message, nil
@@ -206,21 +204,21 @@ func main() {
 		select {
 		case tra := <-ch:
 			fmt.Println("pushing new transaction ", tra)
-			err := pushCommand(
-				queueServiceConn,
-				// TODO Determine how we want to
-				// indicate that his command is now
-				// ready to be executed by the backend
-				// service
-				&Command{
-					4,
-					"COMPLETED_TANSACTION",
-					Args{tra.User_id, tra.Command},
-				},
-			)
-			if err != nil {
-				log.Fatal(err)
-			}
+			// err := pushCommand(
+			// 	queueServiceConn,
+			// 	// TODO Determine how we want to
+			// 	// indicate that his command is now
+			// 	// ready to be executed by the backend
+			// 	// service
+			// 	&Command{
+			// 		4,
+			// 		"COMPLETED_TANSACTION",
+			// 		Args{tra.User_id, tra.Command},
+			// 	},
+			// )
+			// if err != nil {
+			// 	log.Fatal(err)
+			// }
 		default:
 			t, err := getNextCommand(queueServiceConn)
 			cmd, err := dispatch(*t.Data)
