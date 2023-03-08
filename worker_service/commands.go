@@ -153,9 +153,9 @@ func (b BUY) Prerequsite(mb *MessageBus) error {
 	ch := mb.Subscribe(notifyADD, userid(b.userId))
 	for n := range ch {
 		if n.Userid == b.userId {
-			if *n.Amount < b.cost && n.Ticket < b.ticket {
+			if *n.Amount < b.amount {
 				return errors.New("Not enough money for this stock")
-			} else {
+			} else if n.Ticket < b.ticket {
 				return nil
 			}
 		}
@@ -176,7 +176,7 @@ func (b BUY) Notify() Notification {
 		Ticket:    b.ticket,
 		Userid:    b.userId,
 		Stock:     &b.stock,
-		Amount:    &b.cost,
+		Amount:    &b.amount,
 	}
 }
 
@@ -370,7 +370,7 @@ func (s SELL) Notify() Notification {
 		Ticket:    s.ticket,
 		Userid:    s.userId,
 		Stock:     &s.stock,
-		Amount:    &s.cost,
+		Amount:    &s.amount,
 	}
 }
 
