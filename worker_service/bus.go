@@ -67,4 +67,5 @@ func (mb *MessageBus) Publish(topic string, message Notification) {
 	if mb.backlog[topic] == nil {
 		mb.backlog[topic] = make(map[userid]*Notification)
 	}
+	mb.backlog[topic][userid(message.Userid)] = &message
 }
