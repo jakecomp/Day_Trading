@@ -252,6 +252,7 @@ func UserAccountManager(mb *MessageBus) {
 			}
 
 			users[uid].Balance += *newMoney.Amount
+			newMoney.Topic = "add"
 			sendAccountLog(&newMoney, users[uid].Balance)
 		case newMoney := <-sell:
 			uid := userid(newMoney.Userid)
@@ -266,6 +267,7 @@ func UserAccountManager(mb *MessageBus) {
 
 			users[uid].Balance += *newMoney.Amount
 			users[uid].Stocks[*newMoney.Stock] = nil
+			newMoney.Topic = "add"
 			sendAccountLog(&newMoney, users[uid].Balance)
 		case newMoney := <-buy:
 			uid := userid(newMoney.Userid)
@@ -283,6 +285,7 @@ func UserAccountManager(mb *MessageBus) {
 				name: *newMoney.Stock,
 				cost: float64(0),
 			}
+			newMoney.Topic = "remove"
 			sendAccountLog(&newMoney, users[uid].Balance)
 		}
 	}
@@ -310,10 +313,10 @@ func main() {
 	// Used for logging commands when recieved
 	nch := make(chan *Notification)
 
-	// Logs all transactions to user accounts
-	go UserAccountManager(mb)
 	// Logs all incoming commands
 	go commandLogger(nch)
+	// Logs all transactions to user accounts
+	go UserAccountManager(mb)
 
 	for {
 		select {
