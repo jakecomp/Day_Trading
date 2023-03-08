@@ -159,10 +159,10 @@ func getNextCommand(conn *websocket.Conn) (*Message, error) {
 			return message, nil
 		} else if message.Command == "EMPTY" {
 			// Empty, wait and try again
-			time.Sleep(time.Millisecond * 5000)
+			time.Sleep(time.Millisecond * 500)
 		} else {
 			fmt.Println("Unknown Request")
-			time.Sleep(time.Millisecond * 5000)
+			time.Sleep(time.Millisecond * 500)
 		}
 
 		if err != nil {
