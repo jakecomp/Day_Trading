@@ -67,58 +67,6 @@ type Message struct {
 	Data    *Command
 }
 
-// func socketReader(conn *websocket.Conn) {
-// 	// Event Loop, Handle Comms in here
-// 	transaction := &Command{1, "BUY", Args{"USERNAME", "S", "24.5", "600.0"}}
-// 	fmt.Println("transaction: ", *transaction)
-
-// 	message := &Message{"ENQUEUE", transaction}
-// 	msg, _ := json.Marshal(*message)
-
-// 	fmt.Println("MSG: ", string(msg))
-// 	err := conn.WriteMessage(websocket.TextMessage, msg)
-
-// 	if err != nil {
-// 		fmt.Println("Error during enqueue:", err)
-// 	}
-
-// 	for {
-// 		// Attempt Dequeue
-// 		message.Command = "DEQUEUE"
-// 		message.Data = nil
-// 		msg, err = json.Marshal(message)
-// 		err = conn.WriteMessage(websocket.TextMessage, msg)
-
-// 		_, msg, err := conn.ReadMessage()
-// 		if err != nil {
-// 			fmt.Println("Error during message reading:", err)
-// 			break
-// 		}
-
-// 		fmt.Println("MSG: ", string(msg))
-
-// 		err = json.Unmarshal(msg, message)
-
-// 		fmt.Println("Received: ", message)
-// 		if message.Command == "SUCCESS" {
-// 			transaction = message.Data
-// 			// DO STUFF WITH TRANSACTION
-// 			fmt.Println("Transaction: ", transaction)
-// 		} else if message.Command == "EMPTY" {
-// 			// Empty, wait and try again
-// 			time.Sleep(time.Millisecond * 5000)
-// 		} else {
-// 			fmt.Println("Unknown Request")
-// 			time.Sleep(time.Millisecond * 5000)
-// 		}
-
-// 		if err != nil {
-// 			fmt.Println("Error during message writing:", err)
-// 			break
-// 		}
-// 	}
-// }
-
 func pushCommand(conn *websocket.Conn, t *Command) error {
 	// Event Loop, Handle Comms in here
 	fmt.Println("transaction: ", *t)
@@ -246,55 +194,8 @@ func sendSystemLog(n *Notification) {
 		log.Fatal(err)
 	}
 }
-func merge[T any](cs ...<-chan T) <-chan T {
-	out := make(chan T)
 
-	for _, c := range cs {
-		go func() {
-			for v := range c {
-				out <- v
-			}
-		}()
-	}
-	return out
-}
-func logger(nchan chan *Notification) {
-	for {
-		n := <-nchan
-		sendUserLog(n)
-	}
-
-}
-
-// XXX Not used since I wanted the commands to just be handled on dispatch
-// func logger(mb *MessageBus) {
-// 	add := mb.SubscribeAll(notifyADD)
-// 	buy := mb.SubscribeAll(notifyBUY)
-// 	commit_buy := mb.SubscribeAll(notifyCOMMIT_BUY)
-// 	cancel_buy := mb.SubscribeAll(notifyCANCEL_BUY)
-// 	sell := mb.SubscribeAll(notifySELL)
-// 	commit_sell := mb.SubscribeAll(notifyCOMMIT_SELL)
-// 	cancel_sell := mb.SubscribeAll(notifyCANCEL_SELL)
-
-//		for {
-//			select {
-//			case a := <-add:
-//				sendUserLog(&a)
-//			case a := <-buy:
-//				sendUserLog(&a)
-//			case a := <-commit_buy:
-//				sendUserLog(&a)
-//			case a := <-cancel_buy:
-//				sendUserLog(&a)
-//			case a := <-sell:
-//				sendUserLog(&a)
-//			case a := <-commit_sell:
-//				sendUserLog(&a)
-//			case a := <-cancel_sell:
-//				sendUserLog(&a)
-//			}
-//		}
-//	}
+// Logs incomming commands
 func commandLogger(nch chan *Notification) {
 	for {
 		n := <-nch
