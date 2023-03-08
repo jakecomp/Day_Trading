@@ -7,6 +7,7 @@ import (
 
 type Notification struct {
 	Timestamp time.Time
+	Ticket    int64
 	Userid    string
 	Stock     *string
 	Amount    *float64

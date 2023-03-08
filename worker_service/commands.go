@@ -18,7 +18,7 @@ import (
 )
 
 type Transaction struct {
-	Transaction_id string
+	Transaction_id int64
 	User_id        string
 	Command        string
 	Stock_id       string
@@ -86,6 +86,7 @@ const (
 //
 //	ADD,jsmith,200.00
 type ADD struct {
+	ticket int64
 	userId string
 	amount float64
 }
@@ -93,6 +94,7 @@ type ADD struct {
 func (a ADD) Notify(mb *MessageBus) {
 	mb.Publish(notifyADD, Notification{
 		Timestamp: time.Now(),
+		Ticket:    a.ticket,
 		Userid:    a.userId,
 		Stock:     nil,
 		Amount:    &a.amount,
@@ -105,7 +107,14 @@ func (a ADD) Prerequsite(mb *MessageBus) error {
 	return nil
 }
 func (a ADD) Execute(ch chan *Transaction) error {
-	ch <- &Transaction{Transaction_id: "ID_1", User_id: a.userId, Command: notifyADD, Cash_value: a.amount, Stock_id: "", Stock_price: 0}
+	ch <- &Transaction{
+		Transaction_id: a.ticket,
+		User_id:        a.userId,
+		Command:        notifyADD,
+		Cash_value:     a.amount,
+		Stock_id:       "",
+		Stock_price:    0,
+	}
 	return nil
 }
 
@@ -131,6 +140,7 @@ func (a ADD) Postrequsite(mb *MessageBus) error {
 //
 //	BUY,jsmith,ABC,200.00
 type BUY struct {
+	ticket int64
 	userId string
 	stock  string
 	amount float64
@@ -162,6 +172,7 @@ func (b BUY) Execute(ch chan *Transaction) error {
 func (b BUY) Notify(mb *MessageBus) {
 	mb.Publish(notifyBUY, Notification{
 		Timestamp: time.Now(),
+		Ticket:    b.ticket,
 		Userid:    b.userId,
 		Stock:     &b.stock,
 		Amount:    &b.cost,
@@ -207,6 +218,7 @@ func (b BUY) Postrequsite(mb *MessageBus) error {
 //	COMMIT_BUY,jsmith
 
 type COMMIT_BUY struct {
+	ticket int64
 	userId string
 	buy    Notification
 }
@@ -226,12 +238,12 @@ func (b *COMMIT_BUY) Prerequsite(mb *MessageBus) error {
 
 func (b COMMIT_BUY) Execute(ch chan *Transaction) error {
 	ch <- &Transaction{
-		Transaction_id: "ID_1",
+		Transaction_id: b.ticket,
 		User_id:        b.userId,
 		Command:        notifyCOMMIT_BUY,
 		Stock_id:       *b.buy.Stock,
-		Stock_price:    24.5,
-		Cash_value:     600.0,
+		Cash_value:     *b.buy.Amount,
+		Stock_price:    0,
 	}
 	return nil
 }
@@ -239,6 +251,7 @@ func (b COMMIT_BUY) Execute(ch chan *Transaction) error {
 func (b COMMIT_BUY) Notify(mb *MessageBus) {
 	mb.Publish(notifyCOMMIT_BUY, Notification{
 		Timestamp: time.Now(),
+		Ticket:    b.ticket,
 		Userid:    b.userId,
 		Stock:     b.buy.Stock,
 		Amount:    b.buy.Amount,
@@ -267,6 +280,7 @@ func (b COMMIT_BUY) Postrequsite(mb *MessageBus) error {
 //
 //	CANCEL_BUY,jsmith
 type CANCEL_BUY struct {
+	ticket int64
 	userId string
 	buy    Notification
 }
@@ -291,6 +305,7 @@ func (b CANCEL_BUY) Execute(ch chan *Transaction) error {
 func (b CANCEL_BUY) Notify(mb *MessageBus) {
 	mb.Publish(notifyCANCEL_BUY, Notification{
 		Timestamp: time.Now(),
+		Ticket:    b.ticket,
 		Userid:    b.userId,
 		Stock:     b.buy.Stock,
 		Amount:    b.buy.Amount,
@@ -319,6 +334,7 @@ func (b CANCEL_BUY) Postrequsite(mb *MessageBus) error {
 //
 //	SELL,jsmith,ABC,100.00
 type SELL struct {
+	ticket int64
 	userId string
 	stock  string
 	amount float64
@@ -347,6 +363,7 @@ func (b SELL) Execute(ch chan *Transaction) error {
 func (s SELL) Notify(mb *MessageBus) {
 	mb.Publish(notifySELL, Notification{
 		Timestamp: time.Now(),
+		Ticket:    s.ticket,
 		Userid:    s.userId,
 		Stock:     &s.stock,
 		Amount:    &s.cost,
@@ -390,6 +407,7 @@ func (s SELL) Postrequsite(mb *MessageBus) error {
 //
 //	COMMIT_SELL,jsmith
 type COMMIT_SELL struct {
+	ticket int64
 	userId string
 	sell   Notification
 }
@@ -409,12 +427,12 @@ func (s *COMMIT_SELL) Prerequsite(mb *MessageBus) error {
 
 func (s COMMIT_SELL) Execute(ch chan *Transaction) error {
 	ch <- &Transaction{
-		Transaction_id: "ID_1",
+		Transaction_id: s.ticket,
 		User_id:        s.userId,
 		Command:        notifyCOMMIT_SELL,
 		Stock_id:       *s.sell.Stock,
-		Stock_price:    24.5,
-		Cash_value:     600.0,
+		Stock_price:    0,
+		Cash_value:     *s.sell.Amount,
 	}
 	return nil
 }
@@ -422,6 +440,7 @@ func (s COMMIT_SELL) Execute(ch chan *Transaction) error {
 func (s COMMIT_SELL) Notify(mb *MessageBus) {
 	mb.Publish(notifyCOMMIT_SELL, Notification{
 		Timestamp: time.Now(),
+		Ticket:    s.ticket,
 		Userid:    s.userId,
 		Stock:     s.sell.Stock,
 		Amount:    s.sell.Amount,
@@ -449,6 +468,7 @@ func (b COMMIT_SELL) Postrequsite(mb *MessageBus) error {
 //
 //	CANCEL_SELL,jsmith
 type CANCEL_SELL struct {
+	ticket int64
 	userId string
 	sell   Notification
 }
@@ -473,6 +493,7 @@ func (s CANCEL_SELL) Execute(ch chan *Transaction) error {
 func (s CANCEL_SELL) Notify(mb *MessageBus) {
 	mb.Publish(notifyCANCEL_SELL, Notification{
 		Timestamp: time.Now(),
+		Ticket:    s.ticket,
 		Userid:    s.userId,
 		Stock:     s.sell.Stock,
 		Amount:    s.sell.Amount,

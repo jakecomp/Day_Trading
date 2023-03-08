@@ -30,27 +30,27 @@ func dispatch(cmd Command) (CMD, error) {
 	funcLookup := map[string]func(Command) (CMD, error){
 		"ADD": func(cmd Command) (CMD, error) {
 			a, err := strconv.ParseFloat(cmd.Args[1], 64)
-			return ADD{userId: cmd.Args[0], amount: a}, err
+			return ADD{ticket: int64(cmd.Ticket), userId: cmd.Args[0], amount: a}, err
 		},
 		"BUY": func(cmd Command) (CMD, error) {
 			a, err := strconv.ParseFloat(cmd.Args[2], 64)
-			return BUY{userId: cmd.Args[0], stock: cmd.Args[1], amount: a, cost: 0}, err
+			return BUY{ticket: int64(cmd.Ticket), userId: cmd.Args[0], stock: cmd.Args[1], amount: a, cost: 0}, err
 		},
 		"COMMIT_BUY": func(cmd Command) (CMD, error) {
-			return &COMMIT_BUY{userId: cmd.Args[0]}, nil
+			return &COMMIT_BUY{ticket: int64(cmd.Ticket), userId: cmd.Args[0]}, nil
 		},
 		"CANCEL_BUY": func(cmd Command) (CMD, error) {
-			return &CANCEL_BUY{userId: cmd.Args[0]}, nil
+			return &CANCEL_BUY{ticket: int64(cmd.Ticket), userId: cmd.Args[0]}, nil
 		},
 		"SELL": func(cmd Command) (CMD, error) {
 			a, _ := strconv.ParseFloat(cmd.Args[1], 64)
-			return &SELL{userId: cmd.Args[0], stock: cmd.Args[1], amount: a, cost: 0}, nil
+			return &SELL{ticket: int64(cmd.Ticket), userId: cmd.Args[0], stock: cmd.Args[1], amount: a, cost: 0}, nil
 		},
 		"COMMIT_SELL": func(cmd Command) (CMD, error) {
-			return &COMMIT_SELL{userId: cmd.Args[0]}, nil
+			return &COMMIT_SELL{ticket: int64(cmd.Ticket), userId: cmd.Args[0]}, nil
 		},
 		"CANCEL_SELL": func(cmd Command) (CMD, error) {
-			return &CANCEL_SELL{userId: cmd.Args[0]}, nil
+			return &CANCEL_SELL{ticket: int64(cmd.Ticket), userId: cmd.Args[0]}, nil
 		},
 	}
 	f := funcLookup[cmd.Command]
@@ -184,21 +184,21 @@ func main() {
 	fmt.Println("Worker Service Starting...")
 	// These are just here as an example of what the queue server
 	// could be getting on the other end for the worker to preform
-	commands := []*Command{
-		{1, notifyADD, []string{"USERNAME", "50.5"}},
-		{2, notifyBUY, []string{"USERNAME", "XYZ", "24.5", "600.0"}},
-		{3, notifyCOMMIT_BUY, []string{"USERNAME"}},
-	}
-	// Enqueue Tasks
-	for _, c := range commands {
-		err := pushCommand(
-			queueServiceConn,
-			c,
-		)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
+	// commands := []*Command{
+	// 	{1, notifyADD, []string{"USERNAME", "50.5"}},
+	// 	{2, notifyBUY, []string{"USERNAME", "XYZ", "24.5", "600.0"}},
+	// 	{3, notifyCOMMIT_BUY, []string{"USERNAME"}},
+	// }
+	// // Enqueue Tasks
+	// for _, c := range commands {
+	// 	err := pushCommand(
+	// 		queueServiceConn,
+	// 		c,
+	// 	)
+	// 	if err != nil {
+	// 		log.Fatal(err)
+	// 	}
+	// }
 
 	ch := make(chan *Transaction)
 	mb := NewMessageBus()
