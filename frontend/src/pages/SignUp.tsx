@@ -6,6 +6,7 @@ import { SignInHeader, SignInLink, SignInText } from '../components/sign_in/text
 import { HeaderContainer, InputContainer, LinkContainer } from '../components/sign_in/containers'
 import { FieldForm, InputLabel, SignField } from '../components/sign_in/field'
 import { useForm } from 'react-hook-form'
+import { SimpleLink } from '../components/atoms/links'
 
 export const SignUp = () => {
     interface signForm {
@@ -64,7 +65,7 @@ export const SignUp = () => {
                                 {...register('password')}
                             ></SignField>
                         </InputContainer>
-                        <BigBlackButton>Create account</BigBlackButton>
+                        <SimpleLink to='/home'><BigBlackButton>Create Account</BigBlackButton></SimpleLink>
                     </FieldForm>
                 </Card>
             </SignBackground>

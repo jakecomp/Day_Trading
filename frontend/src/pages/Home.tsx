@@ -1,4 +1,4 @@
-import { NavbarBackground } from '../components/home/background'
+import { HomeBackground, NavbarBackground } from '../components/home/background'
 import { SignBackground } from '../components/sign_in/background'
 import logo from '../assets/logo/Carbs_light.svg'
 import wallet from '../assets/logo/Wallet_duotone_line.svg'
@@ -6,6 +6,7 @@ import download from '../assets/logo/Load_circle.svg'
 import lable from '../assets/logo/lable_duotone.svg'
 import paper from '../assets/logo/Paper_duotone_line.svg'
 import user from '../assets/logo/User_circle.svg'
+import stats from '../assets/logo/stock-market-blue.png'
 import {
     DataContainer,
     DataTextContainer,
@@ -13,26 +14,38 @@ import {
     UserContainer,
     UserTextContainer,
     DataName,
+    StickyContainer,
+    BottomContainer,
+    TradesComponentContainer,
+    AddSellContainer,
+    TradesContainer,
+    TradesCardContainer,
+    StocksCardContainer,
+    StocksContainer,
+    StocksComponentContainer,
 } from '../components/home/containers'
-import { StatusCard } from '../components/home/card'
-import { Header1, Header2 } from '../components/atoms/fonts'
+import { StatusCard, StocksCard, TradesCard } from '../components/home/card'
+import { Header1, Header2, Header3, Header4 } from '../components/atoms/fonts'
 
 export const Home = () => {
     return (
         <div>
-            <NavbarBackground>
-                <UserTextContainer>
-                    <img src={logo} />
-                    <Header1>DTA</Header1>
-                </UserTextContainer>
-                <UserContainer>
+            <StickyContainer>
+                <NavbarBackground>
                     <UserTextContainer>
-                        <Header2>John Smith</Header2>
-                        <img src={user} />
+                        <img src={logo} />
+                        <Header1>DTA</Header1>
                     </UserTextContainer>
-                </UserContainer>
-            </NavbarBackground>
-            <SignBackground>
+                    <UserContainer>
+                        <UserTextContainer>
+                            <Header2>John Smith</Header2>
+                            <img src={user} />
+                        </UserTextContainer>
+                    </UserContainer>
+                </NavbarBackground>
+            </StickyContainer>
+
+            <HomeBackground>
                 <StatusCard>
                     <DataContainer>
                         <img src={wallet} />
@@ -63,7 +76,80 @@ export const Home = () => {
                         </DataTextContainer>
                     </DataContainer>
                 </StatusCard>
-            </SignBackground>
+                <BottomContainer>
+                    <TradesCard>
+                        <TradesCardContainer>
+                            <Header3>My Trades</Header3>
+                            <TradesContainer>
+                                <TradesComponentContainer>
+                                    <Header4>$$</Header4>
+                                    <Header4>ABC Stocks</Header4>
+                                    <AddSellContainer>
+                                        <Header4>Add</Header4>
+                                        <Header4>Sell</Header4>
+                                    </AddSellContainer>
+                                </TradesComponentContainer>
+                                <TradesComponentContainer>
+                                    <Header4>$$</Header4>
+                                    <Header4>ABC Stocks</Header4>
+                                    <AddSellContainer>
+                                        <Header4>Add</Header4>
+                                        <Header4>Sell</Header4>
+                                    </AddSellContainer>
+                                </TradesComponentContainer>
+                                <TradesComponentContainer>
+                                    <Header4>$$</Header4>
+                                    <Header4>ABC Stocks</Header4>
+                                    <AddSellContainer>
+                                        <Header4>Add</Header4>
+                                        <Header4>Sell</Header4>
+                                    </AddSellContainer>
+                                </TradesComponentContainer>
+                                <TradesComponentContainer>
+                                    <Header4>$$</Header4>
+                                    <Header4>ABC Stocks</Header4>
+                                    <AddSellContainer>
+                                        <Header4>Add</Header4>
+                                        <Header4>Sell</Header4>
+                                    </AddSellContainer>
+                                </TradesComponentContainer>
+                            </TradesContainer>
+                            <img src={stats} width='571' height='258' />
+                        </TradesCardContainer>
+                    </TradesCard>
+                    <StocksCard>
+                        <StocksCardContainer>
+                            <Header3>Available Stocks</Header3>
+                            <StocksContainer>
+                                <StocksComponentContainer>
+                                    <Header4>$$</Header4>
+                                    <Header4>ABC Stocks</Header4>
+                                    <AddSellContainer>
+                                        <Header4>Add</Header4>
+                                        <Header4>Sell</Header4>
+                                    </AddSellContainer>
+                                </StocksComponentContainer>
+                                <StocksComponentContainer>
+                                    <Header4>$$</Header4>
+                                    <Header4>ABC Stocks</Header4>
+                                    <AddSellContainer>
+                                        <Header4>Add</Header4>
+                                        <Header4>Sell</Header4>
+                                    </AddSellContainer>
+                                </StocksComponentContainer>
+                                <StocksComponentContainer>
+                                    <Header4>$$</Header4>
+                                    <Header4>ABC Stocks</Header4>
+                                    <AddSellContainer>
+                                        <Header4>Add</Header4>
+                                        <Header4>Sell</Header4>
+                                    </AddSellContainer>
+                                </StocksComponentContainer>
+                            </StocksContainer>
+                        </StocksCardContainer>
+                    </StocksCard>
+                </BottomContainer>
+            </HomeBackground>
         </div>
     )
 }

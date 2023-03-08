@@ -12,3 +12,19 @@ export const StatusCard = styled.div`
     justify-content: center;
     align-items: center;
 `
+
+export const TradesCard = styled.div`
+    width: 655px;
+    height: 637px;
+    background-color: #ffffff;
+    box-shadow: 0 8px 24px 0 rgba(0, 0, 0, 0.05);
+    border-radius: 16px;
+`
+
+export const StocksCard = styled.div`
+    width: 345px;
+    height: 637px;
+    background-color: #ffffff;
+    box-shadow: 0 8px 24px 0 rgba(0, 0, 0, 0.05);
+    border-radius: 16px;
+`

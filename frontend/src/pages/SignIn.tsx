@@ -6,6 +6,8 @@ import { SignInHeader, SignInLink, SignInText } from '../components/sign_in/text
 import { InputContainer, LinkContainer } from '../components/sign_in/containers'
 import { FieldForm, InputLabel, SignField } from '../components/sign_in/field'
 import { useForm } from 'react-hook-form'
+import { SimpleLink } from '../components/atoms/links'
+import { Link } from 'react-router-dom'
 
 export const SignIn = () => {
     interface signForm {
@@ -55,7 +57,7 @@ export const SignIn = () => {
                             <InputLabel>Password</InputLabel>
                             <SignField type='password' {...register('password')}></SignField>{' '}
                         </InputContainer>
-                        <BigBlackButton>Sign in</BigBlackButton>
+                    <SimpleLink to='/home'><BigBlackButton>Sign in</BigBlackButton> </SimpleLink>
                     </FieldForm>
                     <LinkContainer>
                         <SignInText>New to Day-trades?</SignInText>
