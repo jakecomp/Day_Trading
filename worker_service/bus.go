@@ -7,6 +7,8 @@ import (
 
 type Notification struct {
 	Timestamp time.Time
+	Topic     string
+	Ticket    int64
 	Userid    string
 	Stock     *string
 	Amount    *float64
@@ -23,6 +25,10 @@ func NewMessageBus() *MessageBus {
 		subscriptions: make(map[string][]chan Notification),
 		backlog:       make(map[string]map[userid]*Notification),
 	}
+}
+
+func (mb *MessageBus) SubscribeAll(topic string) <-chan Notification {
+	return mb.Subscribe(topic, "*ALL*")
 }
 
 func (mb *MessageBus) Subscribe(topic string, uid userid) chan Notification {

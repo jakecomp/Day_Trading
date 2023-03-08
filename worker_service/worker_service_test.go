@@ -10,10 +10,10 @@ func TestCommandsBuyCommit(t *testing.T) {
 	mb := NewMessageBus()
 	finch := make(chan error)
 
-	go Run(ADD{userId: "me", amount: 32.1}, mb, ch)
-	go Run(BUY{userId: "me", stock: "ABC", cost: 32.1, amount: 1.0}, mb, ch)
+	go Run(ADD{ticket: 1, userId: "me", amount: 32.1}, mb, ch)
+	go Run(BUY{ticket: 2, userId: "me", stock: "ABC", cost: 32.1, amount: 1.0}, mb, ch)
 	go func() {
-		Run(&COMMIT_BUY{userId: "me"}, mb, ch)
+		Run(&COMMIT_BUY{ticket: 3, userId: "me"}, mb, ch)
 		finch <- nil
 	}()
 
@@ -36,10 +36,10 @@ func TestCommandsBuyCancel(t *testing.T) {
 	mb := NewMessageBus()
 	finch := make(chan error)
 
-	go Run(ADD{userId: "me", amount: 32.1}, mb, ch)
-	go Run(BUY{userId: "me", stock: "ABC", cost: 32.1, amount: 1.0}, mb, ch)
+	go Run(ADD{ticket: 1, userId: "me", amount: 32.1}, mb, ch)
+	go Run(BUY{ticket: 2, userId: "me", stock: "ABC", cost: 32.1, amount: 1.0}, mb, ch)
 	go func() {
-		Run(&CANCEL_BUY{userId: "me"}, mb, ch)
+		Run(&CANCEL_BUY{ticket: 3, userId: "me"}, mb, ch)
 		finch <- nil
 	}()
 	addT := <-ch
@@ -53,12 +53,12 @@ func TestCommandsSELLCommit(t *testing.T) {
 	mb := NewMessageBus()
 	finch := make(chan error)
 
-	go Run(ADD{userId: "me", amount: 32.1}, mb, ch)
-	go Run(BUY{userId: "me", stock: "ABC", cost: 32.1, amount: 1.0}, mb, ch)
-	go Run(&COMMIT_BUY{userId: "me"}, mb, ch)
-	go Run(SELL{userId: "me", stock: "ABC", cost: 33.1, amount: 1.0}, mb, ch)
+	go Run(ADD{ticket: 1, userId: "me", amount: 32.1}, mb, ch)
+	go Run(BUY{ticket: 2, userId: "me", stock: "ABC", cost: 32.1, amount: 1.0}, mb, ch)
+	go Run(&COMMIT_BUY{ticket: 3, userId: "me"}, mb, ch)
+	go Run(SELL{ticket: 4, userId: "me", stock: "ABC", cost: 32.1, amount: 1.0}, mb, ch)
 	go func() {
-		Run(&COMMIT_SELL{userId: "me"}, mb, ch)
+		Run(&COMMIT_SELL{ticket: 5, userId: "me"}, mb, ch)
 		finch <- nil
 	}()
 	sell := []*Transaction{<-ch, <-ch, <-ch}
@@ -82,12 +82,12 @@ func TestCommandsSELLCancel(t *testing.T) {
 	mb := NewMessageBus()
 	finch := make(chan error)
 
-	go Run(ADD{userId: "me", amount: 32.1}, mb, ch)
-	go Run(BUY{userId: "me", stock: "ABC", cost: 32.1, amount: 1.0}, mb, ch)
-	go Run(&COMMIT_BUY{userId: "me"}, mb, ch)
-	go Run(SELL{userId: "me", stock: "ABC", cost: 33.1, amount: 1.0}, mb, ch)
+	go Run(ADD{ticket: 1, userId: "me", amount: 32.1}, mb, ch)
+	go Run(BUY{ticket: 2, userId: "me", stock: "ABC", cost: 32.1, amount: 1.0}, mb, ch)
+	go Run(&COMMIT_BUY{ticket: 3, userId: "me"}, mb, ch)
+	go Run(SELL{ticket: 4, userId: "me", stock: "ABC", cost: 32.1, amount: 1.0}, mb, ch)
 	go func() {
-		Run(&CANCEL_SELL{userId: "me"}, mb, ch)
+		Run(&CANCEL_SELL{ticket: 5, userId: "me"}, mb, ch)
 		finch <- nil
 	}()
 	sell := []*Transaction{<-ch, <-ch}
@@ -108,14 +108,14 @@ func TestCommandsSELLCommitMultiUser(t *testing.T) {
 	mb := NewMessageBus()
 	finch := make(chan error)
 
-	go Run(ADD{userId: "me", amount: 32.1}, mb, ch)
-	go Run(BUY{userId: "me", stock: "ABC", cost: 32.1, amount: 1.0}, mb, ch)
-	go Run(BUY{userId: "me", stock: "xyz", cost: 32.1, amount: 1.0}, mb, ch)
-	go Run(BUY{userId: "me", stock: "Nile", cost: 10.1, amount: 1.0}, mb, ch)
-	go Run(&COMMIT_BUY{userId: "me"}, mb, ch)
-	go Run(SELL{userId: "me", stock: "ABC", cost: 33.1, amount: 1.0}, mb, ch)
+	go Run(ADD{ticket: 1, userId: "me", amount: 32.1}, mb, ch)
+	go Run(BUY{ticket: 2, userId: "me", stock: "ABC", cost: 32.1, amount: 1.0}, mb, ch)
+	go Run(BUY{ticket: 3, userId: "me", stock: "xyz", cost: 32.1, amount: 1.0}, mb, ch)
+	go Run(BUY{ticket: 4, userId: "me", stock: "Nile", cost: 10.1, amount: 1.0}, mb, ch)
+	go Run(&COMMIT_BUY{ticket: 5, userId: "me"}, mb, ch)
+	go Run(SELL{ticket: 6, userId: "me", stock: "ABC", cost: 33.1, amount: 1.0}, mb, ch)
 	go func() {
-		Run(&COMMIT_SELL{userId: "me"}, mb, ch)
+		Run(&COMMIT_SELL{ticket: 7, userId: "me"}, mb, ch)
 		finch <- nil
 	}()
 	sell := []*Transaction{<-ch, <-ch, <-ch}
@@ -139,12 +139,17 @@ func TestCommandsBUYCommitMultiUser(t *testing.T) {
 	mb := NewMessageBus()
 	finch := make(chan error)
 
-	go Run(ADD{userId: "me", amount: 35.0}, mb, ch)
-	go Run(ADD{userId: "you", amount: 35.0}, mb, ch)
-	go Run(BUY{userId: "me", stock: "ABC", cost: 33.1, amount: 1.0}, mb, ch)
-	go Run(BUY{userId: "you", stock: "ABC", cost: 33.1, amount: 1.0}, mb, ch)
+	go Run(ADD{ticket: 1, userId: "me", amount: 35.0}, mb, ch)
+	go Run(ADD{ticket: 2, userId: "you", amount: 35.0}, mb, ch)
+	go Run(BUY{ticket: 3, userId: "me", stock: "ABC", cost: 33.1, amount: 1.0}, mb, ch)
+	go Run(BUY{ticket: 4, userId: "you", stock: "ABC", cost: 33.1, amount: 1.0}, mb, ch)
 	go func() {
-		Run(&COMMIT_BUY{userId: "me"}, mb, ch)
+		Run(&COMMIT_BUY{ticket: 5, userId: "me"}, mb, ch)
+		finch <- nil
+	}()
+
+	go func() {
+		Run(&COMMIT_BUY{ticket: 7, userId: "you"}, mb, ch)
 		finch <- nil
 	}()
 	sellT := <-ch
@@ -166,22 +171,22 @@ func TestCommandsBUYCommitMultiUser(t *testing.T) {
 	}
 }
 
-// func TestCommandsBUYNotEnoughMoney(t *testing.T) {
-// 	ch := make(chan *Transaction)
-// 	mb := NewMessageBus()
-// 	finch := make(chan error)
+func TestCommandsBUYNotEnoughMoney(t *testing.T) {
+	ch := make(chan *Transaction)
+	mb := NewMessageBus()
+	finch := make(chan error)
 
-// 	go Run(ADD{userId: "me", amount: 2.0}, mb, ch)
-// 	go Run(BUY{userId: "me", stock: "ABC", cost: 35.1, amount: 1.0}, mb, ch)
-// 	go func() {
-// 		Run(&COMMIT_BUY{userId: "me"}, mb, ch)
-// 		finch <- nil
-// 	}()
-// 	sellT := <-ch
-// 	if sellT.Command != notifyADD && sellT.User_id != "you" && sellT.User_id != "me" {
-// 		t.Fatalf("This transaction should have been an COMMIT_SELL %v", sellT.Command)
-// 	}
-// }
+	go Run(ADD{userId: "me", amount: 2.0}, mb, ch)
+	go Run(BUY{userId: "me", stock: "ABC", cost: 35.1, amount: 1.0}, mb, ch)
+	go func() {
+		Run(&COMMIT_BUY{userId: "me"}, mb, ch)
+		finch <- nil
+	}()
+	sellT := <-ch
+	if sellT.Command != notifyADD && sellT.User_id != "you" && sellT.User_id != "me" {
+		t.Fatalf("This transaction should have been an COMMIT_SELL %v", sellT.Command)
+	}
+}
 
 func TestMain(m *testing.M) {
 	setup()
