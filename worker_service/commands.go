@@ -15,13 +15,6 @@ import (
 	"time"
 )
 
-type user_log struct {
-	Username     string   `xml:"username" json:"username"`
-	Funds        string   `xml:"funds" json:"funds"`
-	Ticketnumber int      `xml:"ticketnumber" json:"ticketnumber"`
-	Command      []string `xml:"command,attr" json:"command"`
-}
-
 type Transaction struct {
 	Transaction_id int64
 	User_id        string
@@ -31,18 +24,8 @@ type Transaction struct {
 	Cash_value     float64
 }
 
-func (trans *Transaction) toLog() user_log {
-	u := user_log{
-		Username:     trans.User_id,
-		Funds:        fmt.Sprintf("%f", trans.Cash_value),
-		Ticketnumber: int(trans.Transaction_id),
-		Command:      []string{trans.Command},
-	}
-	return u
-}
-
 type CMD interface {
-	Notify(*MessageBus)
+	Notify() Notification
 	Prerequsite(*MessageBus) error
 	Execute(ch chan *Transaction) error
 	Postrequsite(*MessageBus) error
@@ -62,7 +45,10 @@ func Run(c CMD, m *MessageBus, tchan chan *Transaction) {
 	}
 	log.Println("Executed ", reflect.TypeOf(c), c)
 	log.Println("Sending notification for ", reflect.TypeOf(c), c)
-	go c.Notify(m)
+	go func() {
+		n := c.Notify()
+		m.Publish(n.Topic, n)
+	}()
 	log.Println("Notification sent for ", reflect.TypeOf(c), c)
 	log.Println("Waiting on Postreq for ", reflect.TypeOf(c), c)
 	log.Println("Executing Postreq for ", reflect.TypeOf(c), c)
@@ -74,8 +60,6 @@ func Run(c CMD, m *MessageBus, tchan chan *Transaction) {
 }
 
 const (
-	notifyGET_BALANCE = "GET_BALANCE"
-	notifyBALANCE     = "BALANCE"
 	notifyADD         = "ADD"
 	notifyBUY         = "BUY"
 	notifySELL        = "SELL"
@@ -106,14 +90,15 @@ type ADD struct {
 	amount float64
 }
 
-func (a ADD) Notify(mb *MessageBus) {
-	mb.Publish(notifyADD, Notification{
+func (a ADD) Notify() Notification {
+	return Notification{
+		Topic:     notifyADD,
 		Timestamp: time.Now(),
 		Ticket:    a.ticket,
 		Userid:    a.userId,
 		Stock:     nil,
 		Amount:    &a.amount,
-	})
+	}
 }
 
 // lookup user balance
@@ -184,14 +169,15 @@ func (b BUY) Execute(ch chan *Transaction) error {
 	return nil
 }
 
-func (b BUY) Notify(mb *MessageBus) {
-	mb.Publish(notifyBUY, Notification{
+func (b BUY) Notify() Notification {
+	return Notification{
+		Topic:     notifyBUY,
 		Timestamp: time.Now(),
 		Ticket:    b.ticket,
 		Userid:    b.userId,
 		Stock:     &b.stock,
 		Amount:    &b.cost,
-	})
+	}
 }
 
 func (b BUY) Postrequsite(mb *MessageBus) error {
@@ -263,14 +249,15 @@ func (b COMMIT_BUY) Execute(ch chan *Transaction) error {
 	return nil
 }
 
-func (b COMMIT_BUY) Notify(mb *MessageBus) {
-	mb.Publish(notifyCOMMIT_BUY, Notification{
+func (b COMMIT_BUY) Notify() Notification {
+	return Notification{
+		Topic:     notifyCOMMIT_BUY,
 		Timestamp: time.Now(),
 		Ticket:    b.ticket,
 		Userid:    b.userId,
 		Stock:     b.buy.Stock,
 		Amount:    b.buy.Amount,
-	})
+	}
 }
 
 func (b COMMIT_BUY) Postrequsite(mb *MessageBus) error {
@@ -317,14 +304,15 @@ func (b CANCEL_BUY) Execute(ch chan *Transaction) error {
 	return nil
 }
 
-func (b CANCEL_BUY) Notify(mb *MessageBus) {
-	mb.Publish(notifyCANCEL_BUY, Notification{
+func (b CANCEL_BUY) Notify() Notification {
+	return Notification{
+		Topic:     notifyCANCEL_BUY,
 		Timestamp: time.Now(),
 		Ticket:    b.ticket,
 		Userid:    b.userId,
 		Stock:     b.buy.Stock,
 		Amount:    b.buy.Amount,
-	})
+	}
 }
 
 func (b CANCEL_BUY) Postrequsite(mb *MessageBus) error {
@@ -375,14 +363,15 @@ func (b SELL) Execute(ch chan *Transaction) error {
 	return nil
 }
 
-func (s SELL) Notify(mb *MessageBus) {
-	mb.Publish(notifySELL, Notification{
+func (s SELL) Notify() Notification {
+	return Notification{
+		Topic:     notifySELL,
 		Timestamp: time.Now(),
 		Ticket:    s.ticket,
 		Userid:    s.userId,
 		Stock:     &s.stock,
 		Amount:    &s.cost,
-	})
+	}
 }
 
 func (s SELL) Postrequsite(mb *MessageBus) error {
@@ -452,14 +441,15 @@ func (s COMMIT_SELL) Execute(ch chan *Transaction) error {
 	return nil
 }
 
-func (s COMMIT_SELL) Notify(mb *MessageBus) {
-	mb.Publish(notifyCOMMIT_SELL, Notification{
+func (s COMMIT_SELL) Notify() Notification {
+	return Notification{
+		Topic:     notifyCOMMIT_SELL,
 		Timestamp: time.Now(),
 		Ticket:    s.ticket,
 		Userid:    s.userId,
 		Stock:     s.sell.Stock,
 		Amount:    s.sell.Amount,
-	})
+	}
 }
 
 func (b COMMIT_SELL) Postrequsite(mb *MessageBus) error {
@@ -505,14 +495,15 @@ func (s CANCEL_SELL) Execute(ch chan *Transaction) error {
 	return nil
 }
 
-func (s CANCEL_SELL) Notify(mb *MessageBus) {
-	mb.Publish(notifyCANCEL_SELL, Notification{
+func (s CANCEL_SELL) Notify() Notification {
+	return Notification{
+		Topic:     notifyCANCEL_SELL,
 		Timestamp: time.Now(),
 		Ticket:    s.ticket,
 		Userid:    s.userId,
 		Stock:     s.sell.Stock,
 		Amount:    s.sell.Amount,
-	})
+	}
 }
 
 func (b CANCEL_SELL) Postrequsite(mb *MessageBus) error {

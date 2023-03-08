@@ -171,7 +171,53 @@ func getNextCommand(conn *websocket.Conn) (*Message, error) {
 	}
 
 }
-func sendUserLog(u user_log) {
+
+type user_log struct {
+	Username     string   `xml:"username" json:"username"`
+	Funds        string   `xml:"funds" json:"funds"`
+	Ticketnumber int      `xml:"ticketnumber" json:"ticketnumber"`
+	Command      []string `xml:"command,attr" json:"command"`
+}
+
+type system_log struct {
+	Username     string   `xml:"username" json:"username"`
+	Funds        string   `xml:"funds" json:"funds"`
+	Ticketnumber int      `xml:"ticketnumber" json:"ticketnumber"`
+	Command      []string `xml:"command,attr" json:"command"`
+}
+
+type account_log struct {
+	Timestamp    int64    `xml:"timestamp"`
+	Username     string   `xml:"username" json:"username"`
+	Funds        string   `xml:"funds" json:"funds"`
+	Ticketnumber int      `xml:"ticketnumber" json:"ticketnumber"`
+	Action       []string `xml:"action,attr" json:"action"`
+}
+
+func sendAccountLog(n *Notification) {
+	a := account_log{
+		Username:     n.Userid,
+		Funds:        fmt.Sprintf("%f", n.Amount),
+		Ticketnumber: int(n.Ticket),
+		Action:       []string{n.Topic},
+	}
+
+	ulog, _ := json.Marshal(a)
+	bodyReader := bytes.NewReader(ulog)
+	_, err := http.Post("http://10.9.0.9:8004/accountlog", "application/json", bodyReader)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func sendUserLog(n *Notification) {
+	u := user_log{
+		Username:     n.Userid,
+		Funds:        fmt.Sprintf("%f", n.Amount),
+		Ticketnumber: int(n.Ticket),
+		Command:      []string{n.Topic},
+	}
+
 	ulog, _ := json.Marshal(u)
 	bodyReader := bytes.NewReader(ulog)
 	_, err := http.Post("http://10.9.0.9:8004/userlog", "application/json", bodyReader)
@@ -180,6 +226,69 @@ func sendUserLog(u user_log) {
 	}
 }
 
+func sendSystemLog(n *Notification) {
+	s := system_log{
+		Username:     n.Userid,
+		Funds:        "0",
+		Ticketnumber: int(n.Ticket),
+		Command:      []string{n.Topic},
+	}
+	ulog, _ := json.Marshal(s)
+	bodyReader := bytes.NewReader(ulog)
+	_, err := http.Post("http://10.9.0.9:8004/systemlog", "application/json", bodyReader)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+func merge[T any](cs ...<-chan T) <-chan T {
+	out := make(chan T)
+
+	for _, c := range cs {
+		go func() {
+			for v := range c {
+				out <- v
+			}
+		}()
+	}
+	return out
+}
+func logger(nchan chan *Notification) {
+	for {
+		n := <-nchan
+		sendUserLog(n)
+	}
+
+}
+
+// XXX Not used since I wanted the commands to just be handled on dispatch
+// func logger(mb *MessageBus) {
+// 	add := mb.SubscribeAll(notifyADD)
+// 	buy := mb.SubscribeAll(notifyBUY)
+// 	commit_buy := mb.SubscribeAll(notifyCOMMIT_BUY)
+// 	cancel_buy := mb.SubscribeAll(notifyCANCEL_BUY)
+// 	sell := mb.SubscribeAll(notifySELL)
+// 	commit_sell := mb.SubscribeAll(notifyCOMMIT_SELL)
+// 	cancel_sell := mb.SubscribeAll(notifyCANCEL_SELL)
+
+//		for {
+//			select {
+//			case a := <-add:
+//				sendUserLog(&a)
+//			case a := <-buy:
+//				sendUserLog(&a)
+//			case a := <-commit_buy:
+//				sendUserLog(&a)
+//			case a := <-cancel_buy:
+//				sendUserLog(&a)
+//			case a := <-sell:
+//				sendUserLog(&a)
+//			case a := <-commit_sell:
+//				sendUserLog(&a)
+//			case a := <-cancel_sell:
+//				sendUserLog(&a)
+//			}
+//		}
+//	}
 func main() {
 	// Determin if we should use local host
 	var host string
@@ -210,33 +319,24 @@ func main() {
 
 	ch := make(chan *Transaction)
 	mb := NewMessageBus()
+	nch := make(chan *Notification)
+	go logger(nch)
 	for {
 		select {
 		case tra := <-ch:
-			fmt.Println("pushing new transaction ", tra.toLog())
-			sendUserLog(tra.toLog())
+			fmt.Println("pushing new transaction ", tra)
+			// sendUserLog(tra)
 
-			// err := pushCommand(
-			// 	queueServiceConn,
-			// 	// TODO Determine how we want to
-			// 	// indicate that his command is now
-			// 	// ready to be executed by the backend
-			// 	// service
-			// 	&Command{
-			// 		4,
-			// 		"COMPLETED_TANSACTION",
-			// 		Args{tra.User_id, tra.Command},
-			// 	},
-			// )
-			// if err != nil {
-			// 	log.Fatal(err)
-			// }
 		default:
 			t, err := getNextCommand(queueServiceConn)
 			cmd, err := dispatch(*t.Data)
 			if err == nil {
+				n := cmd.Notify()
+				go func() {
+					nch <- &n
+				}()
 				go Run(cmd, mb, ch)
-				time.Sleep(time.Millisecond * 100)
+				time.Sleep(time.Millisecond * 10)
 			} else {
 				log.Println("ERROR:", err)
 			}
