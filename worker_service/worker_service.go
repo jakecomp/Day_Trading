@@ -14,19 +14,61 @@ import (
 	"time"
 )
 
+type userid string
+type Args []string
+type user_log struct {
+	Username     string   `xml:"username" json:"username"`
+	Funds        string   `xml:"funds" json:"funds"`
+	Ticketnumber int      `xml:"ticketnumber" json:"ticketnumber"`
+	Command      []string `xml:"command,attr" json:"command"`
+}
+
+type system_log struct {
+	Username     string   `xml:"username" json:"username"`
+	Funds        string   `xml:"funds" json:"funds"`
+	Ticketnumber int      `xml:"ticketnumber" json:"ticketnumber"`
+	Command      []string `xml:"command,attr" json:"command"`
+}
+
+type account_log struct {
+	Username     string   `xml:"username" json:"username"`
+	Funds        string   `xml:"funds" json:"funds"`
+	Ticketnumber int      `xml:"ticketnumber" json:"ticketnumber"`
+	Action       []string `xml:"action,attr" json:"action"`
+}
+
 type Command struct {
 	Ticket  int
 	Command string
 	Args    Args
 }
 
-type userid string
-type amount float32
-type StockSymbol string
-type filename string
-type Args []string
-type report string
+type Message struct {
+	Command string
+	Data    *Command
+}
 
+type Stock struct {
+	name string
+	cost float64
+}
+
+type User struct {
+	Balance float64
+	Stocks  map[string]*Stock
+}
+
+func NewUser() *User {
+	return &User{
+		Balance: float64(0),
+		Stocks:  make(map[string]*Stock, 0),
+	}
+}
+
+// Internal DB of user state
+var users map[userid]*User
+
+// Dispatch commands based on the command string given
 func dispatch(cmd Command) (CMD, error) {
 	log.Println("in dispatch command is ", cmd.Command, cmd.Args)
 	funcLookup := map[string]func(Command) (CMD, error){
@@ -62,11 +104,8 @@ func dispatch(cmd Command) (CMD, error) {
 	return funcLookup[cmd.Command](cmd)
 }
 
-type Message struct {
-	Command string
-	Data    *Command
-}
-
+// Enqueue a new command to the queue server
+// not used in this current implementation
 func pushCommand(conn *websocket.Conn, t *Command) error {
 	// Event Loop, Handle Comms in here
 	fmt.Println("transaction: ", *t)
@@ -81,6 +120,7 @@ func pushCommand(conn *websocket.Conn, t *Command) error {
 	return err
 }
 
+// TODO avoid this blocking for to avoid unnecssecary blocking on main thread
 func getNextCommand(conn *websocket.Conn) (*Message, error) {
 	for {
 		// Attempt Dequeue
@@ -115,28 +155,7 @@ func getNextCommand(conn *websocket.Conn) (*Message, error) {
 
 }
 
-type user_log struct {
-	Username     string   `xml:"username" json:"username"`
-	Funds        string   `xml:"funds" json:"funds"`
-	Ticketnumber int      `xml:"ticketnumber" json:"ticketnumber"`
-	Command      []string `xml:"command,attr" json:"command"`
-}
-
-type system_log struct {
-	Username     string   `xml:"username" json:"username"`
-	Funds        string   `xml:"funds" json:"funds"`
-	Ticketnumber int      `xml:"ticketnumber" json:"ticketnumber"`
-	Command      []string `xml:"command,attr" json:"command"`
-}
-
-type account_log struct {
-	Timestamp    int64    `xml:"timestamp"`
-	Username     string   `xml:"username" json:"username"`
-	Funds        string   `xml:"funds" json:"funds"`
-	Ticketnumber int      `xml:"ticketnumber" json:"ticketnumber"`
-	Action       []string `xml:"action,attr" json:"action"`
-}
-
+// Used for logging anything related to a users account
 func sendAccountLog(n *Notification, bal float64) {
 	a := account_log{
 		Username:     n.Userid,
@@ -153,6 +172,7 @@ func sendAccountLog(n *Notification, bal float64) {
 	}
 }
 
+// User command logs
 func sendUserLog(n *Notification) {
 	var money string
 	if users[userid(n.Userid)] == nil {
@@ -175,6 +195,7 @@ func sendUserLog(n *Notification) {
 	}
 }
 
+// Not currently used
 func sendSystemLog(n *Notification) {
 	s := system_log{
 		Username:     n.Userid,
@@ -198,74 +219,58 @@ func commandLogger(nch chan *Notification) {
 	}
 }
 
-type Stock struct {
-	name string
-	cost float64
-}
-
-type User struct {
-	Balance float64
-	Stocks  map[string]*Stock
-}
-
-var users map[userid]*User
-
 // TODO clean this up there is so much repreated code
+// TODO Publish errors as needed
 func UserAccountManager(mb *MessageBus) {
 	users = make(map[userid]*User)
 	add := mb.SubscribeAll(notifyADD)
 	buy := mb.SubscribeAll(notifyCOMMIT_BUY)
 	sell := mb.SubscribeAll(notifyCOMMIT_SELL)
-	newUser := func() *User {
-		return &User{
-			Balance: float64(0),
-			Stocks:  make(map[string]*Stock, 0),
+
+	for {
+		select {
+		case newMoney := <-add:
+			uid := userid(newMoney.Userid)
+
+			if users[uid] == nil {
+				users[uid] = NewUser()
+			}
+
+			users[uid].Balance += *newMoney.Amount
+			sendAccountLog(&newMoney, users[uid].Balance)
+		case newMoney := <-sell:
+			uid := userid(newMoney.Userid)
+
+			if users[uid] == nil {
+				users[uid] = NewUser()
+			}
+
+			if users[uid].Stocks[*newMoney.Stock] == nil {
+				log.Fatalln("Trying to sell stock user doesn't own", *newMoney.Stock)
+			}
+
+			users[uid].Balance += *newMoney.Amount
+			users[uid].Stocks[*newMoney.Stock] = nil
+			sendAccountLog(&newMoney, users[uid].Balance)
+		case newMoney := <-buy:
+			uid := userid(newMoney.Userid)
+
+			if users[uid] == nil {
+				users[uid] = NewUser()
+			}
+
+			if users[uid].Balance < *newMoney.Amount {
+				log.Fatalln("Negative balance is not allowed", *newMoney.Stock)
+			}
+
+			users[uid].Balance -= *newMoney.Amount
+			users[uid].Stocks[*newMoney.Stock] = &Stock{
+				name: *newMoney.Stock,
+				cost: float64(0),
+			}
+			sendAccountLog(&newMoney, users[uid].Balance)
 		}
 	}
-	go func() {
-		for {
-			select {
-			case newMoney := <-add:
-				uid := userid(newMoney.Userid)
-
-				user := users[uid]
-				if user == nil {
-					users[uid] = newUser()
-				}
-				users[uid].Balance += *newMoney.Amount
-				sendAccountLog(&newMoney, users[uid].Balance)
-			case newMoney := <-sell:
-				uid := userid(newMoney.Userid)
-				user := users[uid]
-				if user == nil {
-					users[uid] = newUser()
-				}
-				if users[uid].Stocks[*newMoney.Stock] == nil {
-					log.Fatalln("Trying to sell stock user doesn't own", *newMoney.Stock)
-				}
-				users[uid].Balance += *newMoney.Amount
-				users[uid].Stocks[*newMoney.Stock] = nil
-				sendAccountLog(&newMoney, users[uid].Balance)
-			case newMoney := <-buy:
-				uid := userid(newMoney.Userid)
-				log.Println("Buying", newMoney)
-				user := users[uid]
-				if user == nil {
-					users[uid] = newUser()
-				}
-				users[uid].Balance -= *newMoney.Amount
-				users[uid].Stocks[*newMoney.Stock] = &Stock{
-					name: *newMoney.Stock,
-					cost: float64(0),
-				}
-				if users[uid].Balance < 0 {
-					log.Fatalln("Negative balance is not allowed", *newMoney.Stock)
-				}
-				sendAccountLog(&newMoney, users[uid].Balance)
-			}
-		}
-	}()
-	// TODO Publish errors as needed
 }
 
 func main() {
@@ -276,15 +281,19 @@ func main() {
 		host = "localhost"
 	} else {
 		host = "10.9.0.7"
-		// Dissable logging by default
+		// Disable logging by default
 		log.SetOutput(ioutil.Discard)
 	}
 	queueServiceConn, _, _ := websocket.DefaultDialer.Dial("ws://"+host+":8001/ws?", nil)
 	log.Println("Worker Service Starting...")
 
-	ch := make(chan *Transaction)
-	nch := make(chan *Notification)
+	// Message bus shared between commands
 	mb := NewMessageBus()
+
+	// intended for updating the DB when used
+	ch := make(chan *Transaction)
+	// Used for logging commands when recieved
+	nch := make(chan *Notification)
 
 	// Logs all transactions to user accounts
 	go UserAccountManager(mb)
@@ -295,18 +304,18 @@ func main() {
 		select {
 		case tra := <-ch:
 			log.Println("pushing new transaction ", tra)
-			// sendUserLog(tra)
 		default:
 			t, err := getNextCommand(queueServiceConn)
 			cmd, err := dispatch(*t.Data)
-			if cmd != nil {
+			if err == nil {
+				// Log the new command
 				go func() {
 					n := cmd.Notify()
 					nch <- &n
 				}()
-			}
-			if err == nil {
+				// Execute this new command
 				go Run(cmd, mb, ch)
+				// Sleep is here to avoid blocking the queue server for too long
 				time.Sleep(time.Millisecond * 10)
 			} else {
 				log.Println("ERROR:", err)
