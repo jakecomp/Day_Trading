@@ -3,7 +3,6 @@ package main
 // TODO Add a way to lookup a users balance
 // used for pre req for buy and sell
 // used for post req for commit commands
-// TODO Pass these transactions over the websocket
 // TODO Add a way to lookup a stock value
 // used for selling and buying
 // TODO assert timeframe for commit and cancel commands
@@ -59,13 +58,19 @@ func Run(c CMD, m *MessageBus, tchan chan *Transaction) {
 }
 
 const (
-	notifyADD         = "ADD"
-	notifyBUY         = "BUY"
-	notifySELL        = "SELL"
-	notifyCOMMIT_BUY  = "COMMIT_BUY"
-	notifyCOMMIT_SELL = "COMMIT_SELL"
-	notifyCANCEL_BUY  = "CANCEL_BUY"
-	notifyCANCEL_SELL = "CANCEL_SELL"
+	notifyADD                = "ADD"
+	notifyBUY                = "BUY"
+	notifySELL               = "SELL"
+	notifyCOMMIT_BUY         = "COMMIT_BUY"
+	notifyCOMMIT_SELL        = "COMMIT_SELL"
+	notifyCANCEL_BUY         = "CANCEL_BUY"
+	notifyCANCEL_SELL        = "CANCEL_SELL"
+	notifyCANCEL_SET_SELL    = "CANCEL_SET_SELL"
+	notifySET_SELL_TRIGGER   = "SET_SELL_TRIGGER"
+	notifySET_SELL_AMOUNT    = "SET_SELL_AMOUNT"
+	notifySET_BUY_TRIGGER    = "SET_BUY_TRIGGER"
+	notifyCANCEL_BUY_TRIGGER = "CANCEL_BUY_TRIGGER"
+	notifySET_BUY_AMOUNT     = "SET_BUY_AMOUNT"
 )
 
 // Purpose:
@@ -505,5 +510,279 @@ func (s CANCEL_SELL) Notify() Notification {
 }
 
 func (b CANCEL_SELL) Postrequsite(mb *MessageBus) error {
+	return nil
+}
+
+// Purpose:
+//
+// Cancels the SET_SELL associated with the given stock and user
+// Pre-conditions:
+//
+// The user must have had a previously set SET_SELL for the given stock
+// Post-Conditions:
+//
+// (a) The set of the user's sell triggers is updated to remove the
+//
+//	sell trigger associated with the specified stock
+//
+// (b) all user account information is reset to the values they would
+//
+//	have been if the given SET_SELL command had not been issued
+//
+// Example:
+//
+// CANCEL_SET_SELL,jsmith,ABC
+type CANCEL_SET_SELL struct {
+	ticket int64
+	userId string
+	sell   Notification
+}
+
+func (c CANCEL_SET_SELL) Prerequsite(mb *MessageBus) error {
+	return nil
+}
+
+func (c CANCEL_SET_SELL) Notify() Notification {
+	return Notification{
+		Topic:     notifyCANCEL_SET_SELL,
+		Timestamp: time.Now(),
+		Ticket:    c.ticket,
+		Userid:    c.userId,
+		Stock:     nil,
+		Amount:    nil,
+	}
+}
+func (c CANCEL_SET_SELL) Execute(ch chan *Transaction) error {
+	return nil
+}
+func (c CANCEL_SET_SELL) Postrequsite(mb *MessageBus) error {
+	return nil
+}
+
+// Purpose:
+//
+// Sets the stock price trigger point for executing any SET_SELL
+// triggers associated with the given stock and user
+// Pre-conditions:
+//
+// The user must have specified a SET_SELL_AMOUNT prior to setting a SET_SELL_TRIGGER
+// Post-Conditions:
+//
+// (a) a reserve account is created for the specified
+//
+//	amount of the given stock
+//
+// (b) the user account for the given stock is
+//
+//	reduced by the max number of stocks that could be purchased and
+//
+// (c) the set of the user's sell triggers is updated to include the
+//
+//	specified trigger.
+//
+// Example:
+//
+// SET_SELL_TRIGGER, jsmith,ABC,120.00
+type SET_SELL_TRIGGER struct {
+	ticket int64
+	userId string
+	sell   Notification
+}
+
+func (c SET_SELL_TRIGGER) Prerequsite(mb *MessageBus) error {
+	return nil
+}
+
+func (c SET_SELL_TRIGGER) Notify() Notification {
+	return Notification{
+		Topic:     notifySET_SELL_TRIGGER,
+		Timestamp: time.Now(),
+		Ticket:    c.ticket,
+		Userid:    c.userId,
+		Stock:     nil,
+		Amount:    nil,
+	}
+}
+func (c SET_SELL_TRIGGER) Execute(ch chan *Transaction) error {
+	return nil
+}
+func (c SET_SELL_TRIGGER) Postrequsite(mb *MessageBus) error {
+	return nil
+}
+
+// Purpose:
+//
+// Sets a defined amount of the specified stock to sell when the
+// current stock price is equal or greater than the sell trigger point
+// Pre-conditions:
+//
+// The user must have the specified amount of stock in their account
+// for that stock.
+// Post-Conditions:
+//
+// A trigger is initialized for this username/stock symbol
+// combination, but is not complete until SET_SELL_TRIGGER is
+// executed.
+// Example:
+//
+// SET_SELL_AMOUNT,jsmith,ABC,550.50
+// TODO fully implement
+type SET_SELL_AMOUNT struct {
+	ticket int64
+	userId string
+	sell   Notification
+}
+
+func (c SET_SELL_AMOUNT) Prerequsite(mb *MessageBus) error {
+	return nil
+}
+
+func (c SET_SELL_AMOUNT) Notify() Notification {
+	return Notification{
+		Topic:     notifySET_SELL_AMOUNT,
+		Timestamp: time.Now(),
+		Ticket:    c.ticket,
+		Userid:    c.userId,
+		Stock:     nil,
+		Amount:    nil,
+	}
+}
+func (c SET_SELL_AMOUNT) Execute(ch chan *Transaction) error {
+	return nil
+}
+func (c SET_SELL_AMOUNT) Postrequsite(mb *MessageBus) error {
+	return nil
+}
+
+// Purpose:
+//
+// Sets the trigger point base on the current stock price when any
+// SET_BUY will execute.
+// Pre-conditions:
+//
+// The user must have specified a SET_BUY_AMOUNT prior to setting a
+// SET_BUY_TRIGGER
+// Post-Conditions:
+//
+// The set of the user's buy triggers is updated to include the
+// specified trigger
+// Example:
+//
+// SET_BUY_TRIGGER,jsmith,ABC,20.00
+// TODO fully implement
+type SET_BUY_TRIGGER struct {
+	ticket int64
+	userId string
+	sell   Notification
+}
+
+func (c SET_BUY_TRIGGER) Prerequsite(mb *MessageBus) error {
+	return nil
+}
+
+func (c SET_BUY_TRIGGER) Notify() Notification {
+	return Notification{
+		Topic:     notifySET_BUY_TRIGGER,
+		Timestamp: time.Now(),
+		Ticket:    c.ticket,
+		Userid:    c.userId,
+		Stock:     nil,
+		Amount:    nil,
+	}
+}
+func (c SET_BUY_TRIGGER) Execute(ch chan *Transaction) error {
+	return nil
+}
+func (c SET_BUY_TRIGGER) Postrequsite(mb *MessageBus) error {
+	return nil
+}
+
+// Purpose:
+//
+// Cancels a SET_BUY command issued for the given stock
+// Pre-conditions:
+//
+// The must have been a SET_BUY Command issued for the given stock
+// by the user
+// Post-Conditions:
+//
+// (a) All accounts are reset to the values they would have had had
+// the SET_BUY Command not been issued
+// (b) the BUY_TRIGGER for the given user and stock is also canceled.
+// Example:
+//
+// CANCEL_SET_BUY,jsmith,ABC
+// TODO fully implement
+type CANCEL_BUY_TRIGGER struct {
+	ticket int64
+	userId string
+	sell   Notification
+}
+
+func (c CANCEL_BUY_TRIGGER) Prerequsite(mb *MessageBus) error {
+	return nil
+}
+
+func (c CANCEL_BUY_TRIGGER) Notify() Notification {
+	return Notification{
+		Topic:     notifyCANCEL_BUY_TRIGGER,
+		Timestamp: time.Now(),
+		Ticket:    c.ticket,
+		Userid:    c.userId,
+		Stock:     nil,
+		Amount:    nil,
+	}
+}
+func (c CANCEL_BUY_TRIGGER) Execute(ch chan *Transaction) error {
+	return nil
+}
+func (c CANCEL_BUY_TRIGGER) Postrequsite(mb *MessageBus) error {
+	return nil
+}
+
+// Purpose:
+//
+// Sets a defined amount of the given stock to buy when the current
+// stock price is less than or equal to the BUY_TRIGGER
+// Pre-conditions:
+//
+// The user's cash account must be greater than or equal to the BUY
+// amount at the time the transaction occurs
+// Post-Conditions:
+//
+// (a) a reserve account is created for the BUY transaction to hold the
+// 	specified amount in reserve for when the transaction is triggered
+// (b) the user's cash account is decremented by the specified amount
+// (c) when the trigger point is reached the user's stock account is
+// 	updated to reflect the BUY transaction.
+// Example:
+//
+// SET_BUY_AMOUNT,jsmith,ABC,50.00
+
+// TODO fully implement
+type SET_BUY_AMOUNT struct {
+	ticket int64
+	userId string
+	sell   Notification
+}
+
+func (c SET_BUY_AMOUNT) Prerequsite(mb *MessageBus) error {
+	return nil
+}
+
+func (c SET_BUY_AMOUNT) Notify() Notification {
+	return Notification{
+		Topic:     notifySET_BUY_AMOUNT,
+		Timestamp: time.Now(),
+		Ticket:    c.ticket,
+		Userid:    c.userId,
+		Stock:     nil,
+		Amount:    nil,
+	}
+}
+func (c SET_BUY_AMOUNT) Execute(ch chan *Transaction) error {
+	return nil
+}
+func (c SET_BUY_AMOUNT) Postrequsite(mb *MessageBus) error {
 	return nil
 }

@@ -72,29 +72,44 @@ var users map[userid]*User
 func dispatch(cmd Command) (CMD, error) {
 	log.Println("in dispatch command is ", cmd.Command, cmd.Args)
 	funcLookup := map[string]func(Command) (CMD, error){
-		"ADD": func(cmd Command) (CMD, error) {
+		notifyADD: func(cmd Command) (CMD, error) {
 			a, err := strconv.ParseFloat(cmd.Args[1], 64)
 			return ADD{ticket: int64(cmd.Ticket), userId: cmd.Args[0], amount: a}, err
 		},
-		"BUY": func(cmd Command) (CMD, error) {
+		notifyBUY: func(cmd Command) (CMD, error) {
 			a, err := strconv.ParseFloat(cmd.Args[2], 64)
 			return BUY{ticket: int64(cmd.Ticket), userId: cmd.Args[0], stock: cmd.Args[1], amount: a, cost: 0}, err
 		},
-		"COMMIT_BUY": func(cmd Command) (CMD, error) {
+		notifyCOMMIT_BUY: func(cmd Command) (CMD, error) {
 			return &COMMIT_BUY{ticket: int64(cmd.Ticket), userId: cmd.Args[0]}, nil
 		},
-		"CANCEL_BUY": func(cmd Command) (CMD, error) {
+		notifyCANCEL_BUY: func(cmd Command) (CMD, error) {
 			return &CANCEL_BUY{ticket: int64(cmd.Ticket), userId: cmd.Args[0]}, nil
 		},
-		"SELL": func(cmd Command) (CMD, error) {
+		notifySELL: func(cmd Command) (CMD, error) {
 			a, _ := strconv.ParseFloat(cmd.Args[1], 64)
 			return &SELL{ticket: int64(cmd.Ticket), userId: cmd.Args[0], stock: cmd.Args[1], amount: a, cost: 0}, nil
 		},
-		"COMMIT_SELL": func(cmd Command) (CMD, error) {
+		notifyCOMMIT_SELL: func(cmd Command) (CMD, error) {
 			return &COMMIT_SELL{ticket: int64(cmd.Ticket), userId: cmd.Args[0]}, nil
 		},
-		"CANCEL_SELL": func(cmd Command) (CMD, error) {
+		notifyCANCEL_SELL: func(cmd Command) (CMD, error) {
 			return &CANCEL_SELL{ticket: int64(cmd.Ticket), userId: cmd.Args[0]}, nil
+		},
+		notifySET_SELL_TRIGGER: func(cmd Command) (CMD, error) {
+			return SET_SELL_TRIGGER{ticket: int64(cmd.Ticket), userId: cmd.Args[0]}, nil
+		},
+		notifySET_SELL_AMOUNT: func(cmd Command) (CMD, error) {
+			return SET_SELL_AMOUNT{ticket: int64(cmd.Ticket), userId: cmd.Args[0]}, nil
+		},
+		notifySET_BUY_TRIGGER: func(cmd Command) (CMD, error) {
+			return SET_BUY_TRIGGER{ticket: int64(cmd.Ticket), userId: cmd.Args[0]}, nil
+		},
+		notifyCANCEL_BUY_TRIGGER: func(cmd Command) (CMD, error) {
+			return CANCEL_BUY_TRIGGER{ticket: int64(cmd.Ticket), userId: cmd.Args[0]}, nil
+		},
+		notifySET_BUY_AMOUNT: func(cmd Command) (CMD, error) {
+			return SET_BUY_AMOUNT{ticket: int64(cmd.Ticket), userId: cmd.Args[0]}, nil
 		},
 	}
 	f := funcLookup[cmd.Command]
