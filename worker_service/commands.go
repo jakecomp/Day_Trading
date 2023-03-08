@@ -7,15 +7,29 @@ package main
 // TODO Add a way to lookup a stock value
 // used for selling and buying
 // TODO assert timeframe for commit and cancel commands
-// TODO restrict some commands to only look at the backlog (commit and cancel)
-// TODO generate transaction IDs
 import (
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"log"
 	"reflect"
 	"time"
 )
+
+type user_log struct {
+	XmlName      xml.Name `xml:"usercommand"`
+	Timestamp    int64    `xml:"timestamp"`
+	Username     string   `xml:"username" json:"username"`
+	Funds        string   `xml:"funds" json:"funds"`
+	Ticketnumber int      `xml:"ticketnumber" json:"ticketnumber"`
+	Command      []string `xml:"command,attr" json:"command"`
+}
+
+func (trans *Transaction) toLog() []byte {
+	if trans.Command == notifyADD {
+
+	}
+}
 
 type Transaction struct {
 	Transaction_id int64
@@ -153,7 +167,7 @@ func (b BUY) Prerequsite(mb *MessageBus) error {
 	ch := mb.Subscribe(notifyADD, userid(b.userId))
 	for n := range ch {
 		if n.Userid == b.userId {
-			if *n.Amount < b.cost {
+			if *n.Amount < b.cost && n.Ticket < b.ticket {
 				return errors.New("Not enough money for this stock")
 			} else {
 				return nil
@@ -185,12 +199,12 @@ func (b BUY) Postrequsite(mb *MessageBus) error {
 
 	select {
 	case n := <-commitChan:
-		if n.Userid == b.userId {
+		if n.Userid == b.userId && n.Ticket > b.ticket {
 			return nil
 		}
 
 	case n := <-cancelChan:
-		if n.Userid == b.userId {
+		if n.Userid == b.userId && n.Ticket > b.ticket {
 			return nil
 		}
 	}
@@ -227,7 +241,7 @@ func (b *COMMIT_BUY) Prerequsite(mb *MessageBus) error {
 	ch := mb.Subscribe(notifyBUY, userid(b.userId))
 
 	for n := range ch {
-		if n.Userid == b.userId {
+		if n.Userid == b.userId && n.Ticket < b.ticket {
 			b.buy = n
 			return nil
 		}
@@ -289,7 +303,7 @@ func (b *CANCEL_BUY) Prerequsite(mb *MessageBus) error {
 	ch := mb.Subscribe(notifyBUY, userid(b.userId))
 
 	for n := range ch {
-		if n.Userid == b.userId {
+		if n.Userid == b.userId && n.Ticket < b.ticket {
 			b.buy = n
 			return nil
 		}
@@ -376,12 +390,12 @@ func (s SELL) Postrequsite(mb *MessageBus) error {
 	cancelChan := mb.Subscribe(notifyCANCEL_SELL, userid(s.userId))
 	select {
 	case n := <-commitChan:
-		if n.Userid == s.userId {
+		if n.Userid == s.userId && n.Ticket > s.ticket {
 			return nil
 		}
 
 	case n := <-cancelChan:
-		if n.Userid == s.userId {
+		if n.Userid == s.userId && n.Ticket > s.ticket {
 			return nil
 		}
 	}
@@ -416,7 +430,7 @@ func (s *COMMIT_SELL) Prerequsite(mb *MessageBus) error {
 	ch := mb.Subscribe(notifySELL, userid(s.userId))
 
 	for n := range ch {
-		if n.Userid == s.userId {
+		if n.Userid == s.userId && n.Ticket < s.ticket {
 			s.sell = n
 			return nil
 		}
@@ -477,7 +491,7 @@ func (s *CANCEL_SELL) Prerequsite(mb *MessageBus) error {
 	ch := mb.Subscribe(notifySELL, userid(s.userId))
 
 	for n := range ch {
-		if n.Userid == s.userId {
+		if n.Userid == s.userId && n.Ticket < s.ticket {
 			s.sell = n
 			return nil
 		}
