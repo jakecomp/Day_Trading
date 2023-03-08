@@ -24,7 +24,7 @@ type userCommand struct {
 	ServerName   string   `xml:"server" json:"server"`
 	Username     string   `xml:"username" json:"username"`
 	Funds        string   `xml:"funds" json:"funds"`
-	Ticketnumber int      `xml:"ticketnumber" json:"ticketnumber"`
+	Ticketnumber int      `xml:"transactionNum" json:"ticketnumber"`
 	Command      []string `xml:"command" json:"command"`
 }
 
@@ -33,18 +33,18 @@ type accountTransaction struct {
 	ServerName   string   `xml:"server" json:"server"`
 	Username     string   `xml:"username" json:"username"`
 	Funds        string   `xml:"funds" json:"funds"`
-	Ticketnumber int      `xml:"ticketnumber" json:"ticketnumber"`
+	Ticketnumber int      `xml:"transactionNum" json:"ticketnumber"`
 	Action       []string `xml:"action" json:"action"`
 }
 
 type quoteServer struct {
 	Timestamp       int64  `xml:"timestamp"`
 	ServerName      string `xml:"server" json:"server"`
-	Username        string `xml:"username" json:"username"`
-	Ticketnumber    int    `xml:"ticketnumber" json:"ticketnumber"`
+	Ticketnumber    int    `xml:"transactionNum" json:"ticketnumber"`
 	Price           string `xml:"price" json:"price"`
+	StockSymbol     string `xml:"stockSymbol" json:"stock_symbol"`
+	Username        string `xml:"username" json:"username"`
 	QuoteServerTime int64  `xml:"quoteServerTime" json:"quoteServerTime"`
-	StockSymbol     string `xml:"stock_symbol" json:"stock_symbol"`
 }
 
 type systemEvent struct {
@@ -52,7 +52,7 @@ type systemEvent struct {
 	ServerName   string   `xml:"server" json:"server"`
 	Username     string   `xml:"username" json:"username"`
 	Funds        string   `xml:"funds" json:"funds"`
-	Ticketnumber int      `xml:"ticketnumber" json:"ticketnumber"`
+	Ticketnumber int      `xml:"transactionNum" json:"ticketnumber"`
 	Command      []string `xml:"command,attr" json:"command"`
 }
 
@@ -60,7 +60,7 @@ type errorEvent struct {
 	Timestamp    int64    `xml:"timestamp"`
 	ServerName   string   `xml:"server" json:"server"`
 	Username     string   `xml:"username" json:"username"`
-	Ticketnumber int      `xml:"ticketnumber" json:"ticketnumber"`
+	Ticketnumber int      `xml:"transactionNum" json:"ticketnumber"`
 	Command      []string `xml:"command" json:"command"`
 }
 
