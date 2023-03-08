@@ -74,15 +74,10 @@ func pushCommand(conn *websocket.Conn, t *Command) error {
 	message := &Message{"ENQUEUE", t}
 	msg, _ := json.Marshal(*message)
 
-	// fmt.Println("MSG: ", string(msg))
 	err := conn.WriteMessage(websocket.TextMessage, msg)
 	if err != nil {
 		return err
 	}
-	// t2, err := getNextCommand(conn)
-	// if t2.Command != "SUCCESS" {
-	// 	log.Fatal("Failed to push ", t2, err)
-	// }
 	return err
 }
 
@@ -215,6 +210,7 @@ type User struct {
 
 var users map[userid]*User
 
+// TODO clean this up there is so much repreated code
 func UserAccountManager(mb *MessageBus) {
 	users = make(map[userid]*User)
 	add := mb.SubscribeAll(notifyADD)
@@ -231,7 +227,6 @@ func UserAccountManager(mb *MessageBus) {
 			select {
 			case newMoney := <-add:
 				uid := userid(newMoney.Userid)
-				log.Println("Adding", newMoney)
 
 				user := users[uid]
 				if user == nil {
@@ -239,10 +234,8 @@ func UserAccountManager(mb *MessageBus) {
 				}
 				users[uid].Balance += *newMoney.Amount
 				sendAccountLog(&newMoney, users[uid].Balance)
-				log.Println(newMoney.Userid, "now has", users[uid].Balance)
 			case newMoney := <-sell:
 				uid := userid(newMoney.Userid)
-				log.Println("Selling", newMoney)
 				user := users[uid]
 				if user == nil {
 					users[uid] = newUser()
@@ -253,8 +246,6 @@ func UserAccountManager(mb *MessageBus) {
 				users[uid].Balance += *newMoney.Amount
 				users[uid].Stocks[*newMoney.Stock] = nil
 				sendAccountLog(&newMoney, users[uid].Balance)
-				log.Println(newMoney.Userid, "now has", users[uid].Balance)
-				log.Println(newMoney.Userid, "now owns", users[uid].Stocks)
 			case newMoney := <-buy:
 				uid := userid(newMoney.Userid)
 				log.Println("Buying", newMoney)
@@ -271,18 +262,15 @@ func UserAccountManager(mb *MessageBus) {
 					log.Fatalln("Negative balance is not allowed", *newMoney.Stock)
 				}
 				sendAccountLog(&newMoney, users[uid].Balance)
-
-				log.Println(newMoney.Userid, "now has", users[uid].Balance)
-				log.Println(newMoney.Userid, "now owns", users[uid].Stocks)
 			}
 		}
 	}()
-	// Publish errors as needed
+	// TODO Publish errors as needed
 }
 
 func main() {
 
-	// Determin if we should use local host
+	// Determine if we should use local host
 	var host string
 	if len(os.Args) > 1 {
 		host = "localhost"

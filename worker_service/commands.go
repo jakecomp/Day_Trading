@@ -50,7 +50,6 @@ func Run(c CMD, m *MessageBus, tchan chan *Transaction) {
 		m.Publish(n.Topic, n)
 	}()
 	log.Println("Notification sent for ", reflect.TypeOf(c), c)
-	log.Println("Waiting on Postreq for ", reflect.TypeOf(c), c)
 	log.Println("Executing Postreq for ", reflect.TypeOf(c), c)
 	err = c.Postrequsite(m)
 	if err != nil {
@@ -297,7 +296,6 @@ func (b *CANCEL_BUY) Prerequsite(mb *MessageBus) error {
 		}
 	}
 	return errors.New("Balance Channel Prematurely Closed")
-
 }
 
 func (b CANCEL_BUY) Execute(ch chan *Transaction) error {
