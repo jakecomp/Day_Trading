@@ -222,8 +222,8 @@ func main() {
 
 func connect() (*mongo.Client, context.Context) {
 	clientOptions := options.Client()
-	//clientOptions.ApplyURI("mongodb://admin:admin@10.9.0.3:27017")
-	clientOptions.ApplyURI("mongodb://admin:admin@localhost:27017")
+	clientOptions.ApplyURI("mongodb://admin:admin@10.9.0.3:27017")
+	// clientOptions.ApplyURI("mongodb://admin:admin@localhost:27017")
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 	client, err := mongo.Connect(ctx, clientOptions)
 
@@ -235,8 +235,8 @@ func connect() (*mongo.Client, context.Context) {
 }
 
 func connectQueue() *websocket.Conn {
-	//conn, _, _ := websocket.DefaultDialer.Dial("ws://10.9.0.7:8001/ws?", nil)
-	conn, _, _ := websocket.DefaultDialer.Dial("ws://localhost:8001/ws?", nil)
+	conn, _, _ := websocket.DefaultDialer.Dial("ws://10.9.0.7:8001/ws?", nil)
+	// conn, _, _ := websocket.DefaultDialer.Dial("ws://localhost:8001/ws?", nil)
 	return conn
 }
 
