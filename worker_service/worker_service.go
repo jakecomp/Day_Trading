@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/gorilla/websocket"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 type userid string
@@ -151,16 +152,16 @@ func getNextCommand(conn *websocket.Conn) (*Message, error) {
 		err = json.Unmarshal(resp, message)
 
 		if message.Command == "SUCCESS" {
-			log.Println("Received: ", message)
-			transaction := message.Data
-			log.Println("Command: ", transaction)
+			//log.Println("Received: ", message)
+			//transaction := message.Data
+			//log.Println("Command: ", transaction)
 			return message, nil
 		} else if message.Command == "EMPTY" {
 			// Empty, wait and try again
-			time.Sleep(time.Millisecond * 500)
+			time.Sleep(time.Millisecond * 50)
 		} else {
 			log.Println("Unknown Request")
-			time.Sleep(time.Millisecond * 500)
+			time.Sleep(time.Millisecond * 50)
 		}
 
 		if err != nil {

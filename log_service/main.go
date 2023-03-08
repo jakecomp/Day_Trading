@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -34,10 +35,21 @@ type account_log struct {
 	Action       []string `xml:"action,attr" json:"action"`
 }
 
+// <quoteServer>
+//
+//	<timestamp>123</timestamp>
+//	<server>own_server</server>
+//	<transactionNum>1</transactionNum>
+//	<price>99.84</price>
+//	<stockSymbol>S</stockSymbol>
+//	<username>joe</username>
+//	<quoteServerTime>321</quoteServerTime>
+//	<cryptoKey>jgjhg</cryptoKey>
+//
+// </quoteServer>
 type quote_log struct {
 	Timestamp    int64  `xml:"timestamp"`
 	Username     string `xml:"username" json:"username"`
-	Funds        string `xml:"funds" json:"funds"`
 	Ticketnumber int    `xml:"ticketnumber" json:"ticketnumber"`
 	Price        string `xml:"price" json:"price"`
 	StockSymbol  string `xml:"stock_symbol" json:"stock_symbol"`
@@ -66,6 +78,14 @@ var f *os.File
 
 func main() {
 	var err error
+
+	_, err = os.Stat("stocklog.txt")
+
+	if !errors.Is(err, os.ErrNotExist) {
+
+		os.Remove("stocklog.txt")
+	}
+
 	f, err = os.OpenFile("stocklog.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 
 	if err != nil {

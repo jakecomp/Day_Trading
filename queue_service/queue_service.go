@@ -34,7 +34,7 @@ var transactionQueue = make([]command, 0)
 
 func enqueue(queue []command, element command) []command {
 	queue = append(queue, element)
-	fmt.Println("Enqueued:", element)
+	//fmt.Println("Enqueued:", element)
 	return queue
 }
 
@@ -78,7 +78,7 @@ func socketReader(conn *websocket.Conn) {
 			break
 		}
 
-		fmt.Println("Received: ", string(msg))
+		//fmt.Println("Received: ", string(msg))
 
 		var message Message
 		// Message Format: {"Command" : "ENQUEUE" , "Data" : "Transaction{}" }
