@@ -20,9 +20,9 @@ func gen_quote(c *gin.Context) {
 
 	var rand_price = min + rand.Float64()*(max-min)
 
-	var new_quote = []quote{
+	var new_quote = quote{
 
-		{Stock: "s", Price: rand_price},
+		Stock: "s", Price: rand_price,
 	}
 
 	c.IndentedJSON(http.StatusOK, new_quote)

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -17,45 +18,50 @@ import (
 	//"github.com/shabbyrobe/xmlwriter"
 )
 
-type user_log struct {
-	XmlName      xml.Name `xml:"usercommand"`
+type userCommand struct {
+	//XmlName      xml.Name `xml:"userCommand"`
 	Timestamp    int64    `xml:"timestamp"`
+	ServerName   string   `xml:"server" json:"server"`
+	Ticketnumber int      `xml:"transactionNum" json:"ticketnumber"`
+	Command      []string `xml:"command" json:"command"`
 	Username     string   `xml:"username" json:"username"`
 	Funds        string   `xml:"funds" json:"funds"`
-	Ticketnumber int      `xml:"ticketnumber" json:"ticketnumber"`
-	Command      []string `xml:"command,attr" json:"command"`
 }
 
-type account_log struct {
+type accountTransaction struct {
 	Timestamp    int64    `xml:"timestamp"`
+	ServerName   string   `xml:"server" json:"server"`
+	Ticketnumber int      `xml:"transactionNum" json:"ticketnumber"`
+	Action       []string `xml:"action" json:"action"`
 	Username     string   `xml:"username" json:"username"`
 	Funds        string   `xml:"funds" json:"funds"`
-	Ticketnumber int      `xml:"ticketnumber" json:"ticketnumber"`
-	Action       []string `xml:"action,attr" json:"action"`
 }
 
-type quote_log struct {
-	Timestamp    int64  `xml:"timestamp"`
-	Username     string `xml:"username" json:"username"`
-	Funds        string `xml:"funds" json:"funds"`
-	Ticketnumber int    `xml:"ticketnumber" json:"ticketnumber"`
-	Price        string `xml:"price" json:"price"`
-	StockSymbol  string `xml:"stock_symbol" json:"stock_symbol"`
+type quoteServer struct {
+	Timestamp       int64  `xml:"timestamp"`
+	ServerName      string `xml:"server" json:"server"`
+	Ticketnumber    int    `xml:"transactionNum" json:"ticketnumber"`
+	Price           string `xml:"price" json:"price"`
+	StockSymbol     string `xml:"stockSymbol" json:"stock_symbol"`
+	Username        string `xml:"username" json:"username"`
+	QuoteServerTime int64  `xml:"quoteServerTime" json:"quoteServerTime"`
 }
 
-type system_log struct {
+type systemEvent struct {
 	Timestamp    int64    `xml:"timestamp"`
+	ServerName   string   `xml:"server" json:"server"`
+	Ticketnumber int      `xml:"transactionNum" json:"ticketnumber"`
+	Command      []string `xml:"command,attr" json:"command"`
 	Username     string   `xml:"username" json:"username"`
 	Funds        string   `xml:"funds" json:"funds"`
-	Ticketnumber int      `xml:"ticketnumber" json:"ticketnumber"`
-	Command      []string `xml:"command,attr" json:"command"`
 }
 
-type error_log struct {
+type errorEvent struct {
 	Timestamp    int64    `xml:"timestamp"`
+	ServerName   string   `xml:"server" json:"server"`
+	Ticketnumber int      `xml:"transactionNum" json:"ticketnumber"`
+	Command      []string `xml:"command" json:"command"`
 	Username     string   `xml:"username" json:"username"`
-	Ticketnumber int      `xml:"ticketnumber" json:"ticketnumber"`
-	Command      []string `xml:"command,attr" json:"command"`
 }
 
 var f *os.File
@@ -66,7 +72,15 @@ var f *os.File
 
 func main() {
 	var err error
-	f, err = os.OpenFile("stocklog.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+
+	_, err = os.Stat("stocklog.xml")
+
+	if !errors.Is(err, os.ErrNotExist) {
+
+		os.Remove("stocklog.xml")
+	}
+
+	f, err = os.OpenFile("stocklog.xml", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 
 	if err != nil {
 
@@ -121,7 +135,7 @@ func handleRequests() {
 
 func userlog(w http.ResponseWriter, r *http.Request) {
 
-	recive_log := &user_log{}
+	recive_log := &userCommand{}
 	err := json.NewDecoder(r.Body).Decode(recive_log)
 	if err != nil {
 		// If there is something wrong with the request body, return a 400 status
@@ -130,6 +144,7 @@ func userlog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	recive_log.Timestamp = timestamp()
+	recive_log.ServerName = "stoinks_server"
 	//_ = xml.NewEncoder(*xmlwriter).Encode(recive_log)
 	out, _ := xml.MarshalIndent(recive_log, "", "\t")
 	//fmt.Println(string(out))
@@ -140,7 +155,7 @@ func userlog(w http.ResponseWriter, r *http.Request) {
 
 func accountlog(w http.ResponseWriter, r *http.Request) {
 
-	recive_log := &account_log{}
+	recive_log := &accountTransaction{}
 	err := json.NewDecoder(r.Body).Decode(recive_log)
 	if err != nil {
 		// If there is something wrong with the request body, return a 400 status
@@ -149,6 +164,7 @@ func accountlog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	recive_log.Timestamp = timestamp()
+	recive_log.ServerName = "stoinks_server"
 	//_ = xml.NewEncoder(*xmlwriter).Encode(recive_log)
 	out, _ := xml.MarshalIndent(recive_log, "", "\t")
 	//fmt.Println(string(out))
@@ -156,7 +172,7 @@ func accountlog(w http.ResponseWriter, r *http.Request) {
 	f.WriteString("\n")
 }
 func quotelog(w http.ResponseWriter, r *http.Request) {
-	recive_log := &quote_log{}
+	recive_log := &quoteServer{}
 	err := json.NewDecoder(r.Body).Decode(recive_log)
 	if err != nil {
 		// If there is something wrong with the request body, return a 400 status
@@ -165,6 +181,7 @@ func quotelog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	recive_log.Timestamp = timestamp()
+	recive_log.ServerName = "stoinks_server"
 	//_ = xml.NewEncoder(*xmlwriter).Encode(recive_log)
 	out, _ := xml.MarshalIndent(recive_log, "", "\t")
 	//fmt.Println(string(out))
@@ -172,7 +189,7 @@ func quotelog(w http.ResponseWriter, r *http.Request) {
 	f.WriteString("\n")
 }
 func systemlog(w http.ResponseWriter, r *http.Request) {
-	recive_log := &system_log{}
+	recive_log := &systemEvent{}
 	err := json.NewDecoder(r.Body).Decode(recive_log)
 	if err != nil {
 		// If there is something wrong with the request body, return a 400 status
@@ -181,6 +198,7 @@ func systemlog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	recive_log.Timestamp = timestamp()
+	recive_log.ServerName = "stoinks_server"
 	//_ = xml.NewEncoder(*xmlwriter).Encode(recive_log)
 	out, _ := xml.MarshalIndent(recive_log, "", "\t")
 	//fmt.Println(string(out))
@@ -188,7 +206,7 @@ func systemlog(w http.ResponseWriter, r *http.Request) {
 	f.WriteString("\n")
 }
 func errorlog(w http.ResponseWriter, r *http.Request) {
-	recive_log := &error_log{}
+	recive_log := &errorEvent{}
 	err := json.NewDecoder(r.Body).Decode(recive_log)
 	if err != nil {
 		// If there is something wrong with the request body, return a 400 status
@@ -197,6 +215,7 @@ func errorlog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	recive_log.Timestamp = timestamp()
+	recive_log.ServerName = "stoinks_server"
 	//_ = xml.NewEncoder(*xmlwriter).Encode(recive_log)
 	out, _ := xml.MarshalIndent(recive_log, "", "\t")
 	//fmt.Println(string(out))

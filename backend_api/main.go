@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"time"
@@ -42,6 +44,19 @@ type command struct {
 type Message struct {
 	Command string
 	Data    *command
+}
+
+type quote struct {
+	Stock string  `json:"stock"`
+	Price float64 `json:"price"`
+}
+
+type quote_log struct {
+	Timestamp    int64  `xml:"timestamp"`
+	Username     string `xml:"username" json:"username"`
+	Ticketnumber int    `xml:"ticketnumber" json:"ticketnumber"`
+	Price        string `xml:"price" json:"price"`
+	StockSymbol  string `xml:"stock_symbol" json:"stock_symbol"`
 }
 
 func homePage(w http.ResponseWriter, r *http.Request) {
@@ -170,16 +185,58 @@ func socketReader(conn *websocket.Conn) {
 			fmt.Println("Error during message reading:", err)
 			break
 		}
-		fmt.Printf("Received: %s", string(message))
+		//fmt.Printf("Received: %s", string(message))
 
 		err = json.Unmarshal(message, cmd)
-		fmt.Println("JSON: ", string(message))
+		//fmt.Println("JSON: ", string(message))
 
 		// Check if should queue item
 		if cmd.Command == "DUMPLOG" {
 			fmt.Printf("DUMPLOG FOUND")
+			//_, err := http.Post("http://10.9.0.9:8004/userlog", "application/json", "")
+			//if err != nil {
+			//	log.Fatal(err)
+			//}
 		} else if cmd.Command == "QUOTE" {
-			fmt.Printf("QUOTE FOUND")
+
+			// Get a quote
+			resp, err := http.Get("http://10.9.0.6:8002")
+			quote := &quote{}
+
+			if resp.StatusCode == http.StatusOK {
+
+				json.NewDecoder(resp.Body).Decode(quote)
+
+				bodyBytes, err := ioutil.ReadAll(resp.Body)
+				if err != nil {
+					log.Fatal(err)
+				}
+				bodyString := string(bodyBytes)
+				//err = json.Unmarshal(bodyBytes, quote)
+				fmt.Println("Quote Response: ", bodyString)
+				if err != nil {
+					fmt.Println("Error decoding Quote")
+				} else {
+					log := quote_log{
+						Timestamp:    time.Now().Unix(),
+						Username:     cmd.Args[0],
+						Ticketnumber: cmd.Ticket,
+						Price:        fmt.Sprintf("%v", quote.Price),
+						StockSymbol:  quote.Stock,
+					}
+
+					fmt.Println(log)
+					log_bytes, err := json.Marshal(log)
+
+					_, err = http.Post("http://10.9.0.9:8004/quotelog", "application/json", bytes.NewBuffer(log_bytes))
+					if err != nil {
+						fmt.Println(err)
+					}
+				}
+
+			} else {
+				fmt.Println("Error: Failed to get quote. ", err)
+			}
 		} else {
 			messageToQueue := &Message{"ENQUEUE", cmd}
 			msg, _ := json.Marshal(*messageToQueue)
