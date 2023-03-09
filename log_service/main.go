@@ -144,6 +144,7 @@ func userlog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	recive_log.Timestamp = timestamp()
+	recive_log.ServerName = "stoinks_server"
 	//_ = xml.NewEncoder(*xmlwriter).Encode(recive_log)
 	out, _ := xml.MarshalIndent(recive_log, "", "\t")
 	//fmt.Println(string(out))
@@ -163,6 +164,7 @@ func accountlog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	recive_log.Timestamp = timestamp()
+	recive_log.ServerName = "stoinks_server"
 	//_ = xml.NewEncoder(*xmlwriter).Encode(recive_log)
 	out, _ := xml.MarshalIndent(recive_log, "", "\t")
 	//fmt.Println(string(out))
@@ -179,6 +181,7 @@ func quotelog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	recive_log.Timestamp = timestamp()
+	recive_log.ServerName = "stoinks_server"
 	//_ = xml.NewEncoder(*xmlwriter).Encode(recive_log)
 	out, _ := xml.MarshalIndent(recive_log, "", "\t")
 	//fmt.Println(string(out))
@@ -195,6 +198,7 @@ func systemlog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	recive_log.Timestamp = timestamp()
+	recive_log.ServerName = "stoinks_server"
 	//_ = xml.NewEncoder(*xmlwriter).Encode(recive_log)
 	out, _ := xml.MarshalIndent(recive_log, "", "\t")
 	//fmt.Println(string(out))
@@ -211,6 +215,7 @@ func errorlog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	recive_log.Timestamp = timestamp()
+	recive_log.ServerName = "stoinks_server"
 	//_ = xml.NewEncoder(*xmlwriter).Encode(recive_log)
 	out, _ := xml.MarshalIndent(recive_log, "", "\t")
 	//fmt.Println(string(out))
