@@ -157,10 +157,10 @@ func getNextCommand(conn *websocket.Conn) (*Message, error) {
 			return message, nil
 		} else if message.Command == "EMPTY" {
 			// Empty, wait and try again
-			time.Sleep(time.Millisecond * 50)
+			time.Sleep(time.Millisecond * 10)
 		} else {
 			log.Println("Unknown Request")
-			time.Sleep(time.Millisecond * 50)
+			time.Sleep(time.Millisecond * 10)
 		}
 
 		if err != nil {
@@ -173,8 +173,9 @@ func getNextCommand(conn *websocket.Conn) (*Message, error) {
 // Used for logging anything related to a users account
 func sendAccountLog(n *Notification, bal float64) {
 	a := account_log{
-		Username:     n.Userid,
-		Funds:        fmt.Sprint(bal),
+		Username: n.Userid,
+		// Funds:        fmt.Sprint(bal),
+		Funds:        fmt.Sprint(*n.Amount),
 		Ticketnumber: int(n.Ticket),
 		Action:       []string{n.Topic},
 	}
@@ -189,19 +190,22 @@ func sendAccountLog(n *Notification, bal float64) {
 
 // User command logs
 func sendUserLog(n *Notification) {
-	var money string
-	if users[userid(n.Userid)] == nil {
-		money = "0"
-	} else {
-		money = fmt.Sprint(users[userid(n.Userid)].Balance)
-	}
-	u := user_log{
-		Username:     n.Userid,
-		Funds:        money,
-		Ticketnumber: int(n.Ticket),
-		Command:      []string{n.Topic},
-	}
+	var u user_log
+	if n.Amount == nil {
+		u = user_log{
+			Username:     n.Userid,
+			Ticketnumber: int(n.Ticket),
+			Command:      []string{n.Topic},
+		}
 
+	} else {
+		u = user_log{
+			Username:     n.Userid,
+			Funds:        fmt.Sprint(*n.Amount),
+			Ticketnumber: int(n.Ticket),
+			Command:      []string{n.Topic},
+		}
+	}
 	ulog, _ := json.Marshal(u)
 	bodyReader := bytes.NewReader(ulog)
 	_, err := http.Post("http://10.9.0.9:8004/userlog", "application/json", bodyReader)
@@ -211,20 +215,20 @@ func sendUserLog(n *Notification) {
 }
 
 // Not currently used
-func sendSystemLog(n *Notification) {
-	s := system_log{
-		Username:     n.Userid,
-		Funds:        fmt.Sprint(users[userid(n.Userid)].Balance),
-		Ticketnumber: int(n.Ticket),
-		Command:      []string{n.Topic},
-	}
-	ulog, _ := json.Marshal(s)
-	bodyReader := bytes.NewReader(ulog)
-	_, err := http.Post("http://10.9.0.9:8004/systemlog", "application/json", bodyReader)
-	if err != nil {
-		log.Fatal(err)
-	}
-}
+// func sendSystemLog(n *Notification) {
+// 	s := system_log{
+// 		Username: n.Userid,
+// 		// Funds:        fmt.Sprint(users[userid(n.Userid)].Balance),
+// 		Ticketnumber: int(n.Ticket),
+// 		Command:      []string{n.Topic},
+// 	}
+// 	ulog, _ := json.Marshal(s)
+// 	bodyReader := bytes.NewReader(ulog)
+// 	_, err := http.Post("http://10.9.0.9:8004/systemlog", "application/json", bodyReader)
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
+// }
 
 // Logs incomming commands
 func commandLogger(nch chan *Notification) {
@@ -311,8 +315,8 @@ func UserAccountManager(mb *MessageBus) {
 	}
 }
 
-func getQuote(stock string) []Stock {
-	var stonks []Stock
+func getQuote(stock string) Stock {
+	var stonks Stock
 	rsp, err := http.Get("http://10.9.0.6:8002")
 	if err != nil {
 		log.Fatal(err)
@@ -334,8 +338,8 @@ func monitorStock(stockName string, mb *MessageBus) {
 			notifySTOCK_PRICE,
 			-1,
 			"",
-			&S[0].Name,
-			&S[0].Price,
+			&S.Name,
+			&S.Price,
 		})
 		time.Sleep(time.Millisecond * 1000)
 	}
@@ -399,7 +403,30 @@ func main() {
 	go UserAccountManager(mb)
 	// Monitor the current stock value
 	go stockMonitor(mb)
-	go stockPrinter(mb)
+	// go stockPrinter(mb)
+	// Log the new command
+	notes := []string{
+		notifyADD,
+		notifyBUY,
+		notifySELL,
+		notifyCOMMIT_BUY,
+		notifyCOMMIT_SELL,
+		notifyCANCEL_BUY,
+		notifyCANCEL_SELL,
+		notifyCANCEL_SET_SELL,
+		notifySET_SELL_TRIGGER,
+		notifySET_SELL_AMOUNT,
+		notifySET_BUY_TRIGGER,
+		notifyCANCEL_BUY_TRIGGER,
+		notifySET_BUY_AMOUNT,
+	}
+	for _, n := range notes {
+		val := n
+		go func() {
+			pubbed := <-mb.SubscribeAll(val)
+			nch <- &pubbed
+		}()
+	}
 
 	for {
 		select {
@@ -409,14 +436,10 @@ func main() {
 			t, err := getNextCommand(queueServiceConn)
 			cmd, err := dispatch(*t.Data)
 			if err == nil {
-				// Log the new command
-				go func() {
-					n := cmd.Notify()
-					nch <- &n
-				}()
 				// Execute this new command
 				go Run(cmd, mb, ch)
-				// Sleep is here to avoid blocking the queue server for too long
+				// Sleep is here to avoid blocking the
+				// queue server for too long
 				time.Sleep(time.Millisecond * 10)
 			} else {
 				log.Println("ERROR:", err)

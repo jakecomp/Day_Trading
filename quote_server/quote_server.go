@@ -22,7 +22,7 @@ func gen_quote(c *gin.Context) {
 
 	var new_quote = quote{
 
-		Stock: "s", Price: rand_price,
+		Stock: "S", Price: rand_price,
 	}
 
 	c.IndentedJSON(http.StatusOK, new_quote)
