@@ -71,6 +71,7 @@ const (
 	notifySET_BUY_TRIGGER    = "SET_BUY_TRIGGER"
 	notifyCANCEL_BUY_TRIGGER = "CANCEL_BUY_TRIGGER"
 	notifySET_BUY_AMOUNT     = "SET_BUY_AMOUNT"
+	notifySTOCK_PRICE        = "STOCK_PRICE"
 )
 
 // Purpose:
@@ -148,7 +149,6 @@ type BUY struct {
 	userId string
 	stock  string
 	amount float64
-	cost   float64
 }
 
 // lookup user balance
@@ -344,7 +344,6 @@ type SELL struct {
 	userId string
 	stock  string
 	amount float64
-	cost   float64
 }
 
 func (s SELL) Prerequsite(mb *MessageBus) error {

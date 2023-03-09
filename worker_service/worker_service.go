@@ -47,21 +47,20 @@ type Message struct {
 	Command string
 	Data    *Command
 }
-
 type Stock struct {
-	name string
-	cost float64
+	Name  string  `json:"stock"`
+	Price float64 `json:"price"`
 }
 
 type User struct {
 	Balance float64
-	Stocks  map[string]*Stock
+	Stocks  map[string]*StockQuantity
 }
 
 func NewUser() *User {
 	return &User{
 		Balance: float64(0),
-		Stocks:  make(map[string]*Stock, 0),
+		Stocks:  make(map[string]*StockQuantity, 0),
 	}
 }
 
@@ -78,7 +77,7 @@ func dispatch(cmd Command) (CMD, error) {
 		},
 		notifyBUY: func(cmd Command) (CMD, error) {
 			a, err := strconv.ParseFloat(cmd.Args[2], 64)
-			return BUY{ticket: int64(cmd.Ticket), userId: cmd.Args[0], stock: cmd.Args[1], amount: a, cost: 0}, err
+			return BUY{ticket: int64(cmd.Ticket), userId: cmd.Args[0], stock: cmd.Args[1], amount: a}, err
 		},
 		notifyCOMMIT_BUY: func(cmd Command) (CMD, error) {
 			return &COMMIT_BUY{ticket: int64(cmd.Ticket), userId: cmd.Args[0]}, nil
@@ -88,7 +87,7 @@ func dispatch(cmd Command) (CMD, error) {
 		},
 		notifySELL: func(cmd Command) (CMD, error) {
 			a, _ := strconv.ParseFloat(cmd.Args[1], 64)
-			return &SELL{ticket: int64(cmd.Ticket), userId: cmd.Args[0], stock: cmd.Args[1], amount: a, cost: 0}, nil
+			return &SELL{ticket: int64(cmd.Ticket), userId: cmd.Args[0], stock: cmd.Args[1], amount: a}, nil
 		},
 		notifyCOMMIT_SELL: func(cmd Command) (CMD, error) {
 			return &COMMIT_SELL{ticket: int64(cmd.Ticket), userId: cmd.Args[0]}, nil
@@ -234,6 +233,11 @@ func commandLogger(nch chan *Notification) {
 	}
 }
 
+type StockQuantity struct {
+	StockName string
+	Quantity  int64
+}
+
 // TODO clean this up there is so much repreated code
 // TODO Publish errors as needed
 func UserAccountManager(mb *MessageBus) {
@@ -242,8 +246,16 @@ func UserAccountManager(mb *MessageBus) {
 	buy := mb.SubscribeAll(notifyCOMMIT_BUY)
 	sell := mb.SubscribeAll(notifyCOMMIT_SELL)
 
+	stockPrice := mb.SubscribeAll(notifySTOCK_PRICE)
+
+	// We need a starting price before we can start these operations
+	tprice := <-stockPrice
+
+	price := *tprice.Amount
 	for {
 		select {
+		case t2price := <-stockPrice:
+			price = *t2price.Amount
 		case newMoney := <-add:
 			uid := userid(newMoney.Userid)
 
@@ -266,7 +278,10 @@ func UserAccountManager(mb *MessageBus) {
 			}
 
 			users[uid].Balance += *newMoney.Amount
-			users[uid].Stocks[*newMoney.Stock] = nil
+			users[uid].Stocks[*newMoney.Stock].Quantity -= int64(*newMoney.Amount / price)
+			if users[uid].Stocks[*newMoney.Stock].Quantity < 0 {
+				log.Fatalln("less than 0 stock available", *newMoney.Stock)
+			}
 			newMoney.Topic = "add"
 			sendAccountLog(&newMoney, users[uid].Balance)
 		case newMoney := <-buy:
@@ -281,9 +296,13 @@ func UserAccountManager(mb *MessageBus) {
 			}
 
 			users[uid].Balance -= *newMoney.Amount
-			users[uid].Stocks[*newMoney.Stock] = &Stock{
-				name: *newMoney.Stock,
-				cost: float64(0),
+			if users[uid].Stocks[*newMoney.Stock] == nil {
+				users[uid].Stocks[*newMoney.Stock] = &StockQuantity{
+					StockName: *newMoney.Stock,
+					Quantity:  int64(*newMoney.Amount / price),
+				}
+			} else {
+				users[uid].Stocks[*newMoney.Stock].Quantity += int64(*newMoney.Amount / price)
 			}
 			newMoney.Topic = "remove"
 			sendAccountLog(&newMoney, users[uid].Balance)
@@ -291,6 +310,66 @@ func UserAccountManager(mb *MessageBus) {
 	}
 }
 
+func getQuote(stock string) []Stock {
+	var stonks []Stock
+	rsp, err := http.Get("http://10.9.0.6:8002")
+	if err != nil {
+		log.Fatal(err)
+	}
+	body, err := ioutil.ReadAll(rsp.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+	json.Unmarshal(body, &stonks)
+	log.Print(stonks)
+	return stonks
+}
+
+func monitorStock(stockName string, mb *MessageBus) {
+	for {
+		S := getQuote(stockName)
+		mb.Publish(notifySTOCK_PRICE, Notification{
+			time.Now(),
+			notifySTOCK_PRICE,
+			-1,
+			"",
+			&S[0].Name,
+			&S[0].Price,
+		})
+		time.Sleep(time.Millisecond * 1000)
+	}
+}
+func stockMonitor(mb *MessageBus) {
+	monitoredStocks := make(map[string]*string)
+	buy := mb.SubscribeAll(notifyBUY)
+	sell := mb.SubscribeAll(notifySELL)
+	select {
+	case stock := <-sell:
+		if monitoredStocks[*stock.Stock] == nil {
+			monitoredStocks[*stock.Stock] = stock.Stock
+			go monitorStock(*stock.Stock, mb)
+		}
+
+	case stock := <-buy:
+		if monitoredStocks[*stock.Stock] == nil {
+			monitoredStocks[*stock.Stock] = stock.Stock
+			go monitorStock(*stock.Stock, mb)
+		}
+	}
+
+}
+
+func stockPrinter(mb *MessageBus) {
+	prices := mb.SubscribeAll(notifySTOCK_PRICE)
+	for {
+		price := <-prices
+		log.Println("Stock price of ", *price.Stock, " is ", Stock{
+			Name:  *price.Stock,
+			Price: *price.Amount,
+		})
+	}
+
+}
 func main() {
 
 	// Determine if we should use local host
@@ -317,6 +396,9 @@ func main() {
 	go commandLogger(nch)
 	// Logs all transactions to user accounts
 	go UserAccountManager(mb)
+	// Monitor the current stock value
+	go stockMonitor(mb)
+	go stockPrinter(mb)
 
 	for {
 		select {
