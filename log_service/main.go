@@ -19,22 +19,22 @@ import (
 )
 
 type userCommand struct {
-	XmlName      xml.Name `xml:"userCommand"`
+	//XmlName      xml.Name `xml:"userCommand"`
 	Timestamp    int64    `xml:"timestamp"`
 	ServerName   string   `xml:"server" json:"server"`
-	Username     string   `xml:"username" json:"username"`
-	Funds        string   `xml:"funds" json:"funds"`
 	Ticketnumber int      `xml:"transactionNum" json:"ticketnumber"`
 	Command      []string `xml:"command" json:"command"`
+	Username     string   `xml:"username" json:"username"`
+	Funds        string   `xml:"funds" json:"funds"`
 }
 
 type accountTransaction struct {
 	Timestamp    int64    `xml:"timestamp"`
 	ServerName   string   `xml:"server" json:"server"`
-	Username     string   `xml:"username" json:"username"`
-	Funds        string   `xml:"funds" json:"funds"`
 	Ticketnumber int      `xml:"transactionNum" json:"ticketnumber"`
 	Action       []string `xml:"action" json:"action"`
+	Username     string   `xml:"username" json:"username"`
+	Funds        string   `xml:"funds" json:"funds"`
 }
 
 type quoteServer struct {
@@ -50,18 +50,18 @@ type quoteServer struct {
 type systemEvent struct {
 	Timestamp    int64    `xml:"timestamp"`
 	ServerName   string   `xml:"server" json:"server"`
-	Username     string   `xml:"username" json:"username"`
-	Funds        string   `xml:"funds" json:"funds"`
 	Ticketnumber int      `xml:"transactionNum" json:"ticketnumber"`
 	Command      []string `xml:"command,attr" json:"command"`
+	Username     string   `xml:"username" json:"username"`
+	Funds        string   `xml:"funds" json:"funds"`
 }
 
 type errorEvent struct {
 	Timestamp    int64    `xml:"timestamp"`
 	ServerName   string   `xml:"server" json:"server"`
-	Username     string   `xml:"username" json:"username"`
 	Ticketnumber int      `xml:"transactionNum" json:"ticketnumber"`
 	Command      []string `xml:"command" json:"command"`
+	Username     string   `xml:"username" json:"username"`
 }
 
 var f *os.File
@@ -73,14 +73,14 @@ var f *os.File
 func main() {
 	var err error
 
-	_, err = os.Stat("stocklog.txt")
+	_, err = os.Stat("stocklog.xml")
 
 	if !errors.Is(err, os.ErrNotExist) {
 
-		os.Remove("stocklog.txt")
+		os.Remove("stocklog.xml")
 	}
 
-	f, err = os.OpenFile("stocklog.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	f, err = os.OpenFile("stocklog.xml", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 
 	if err != nil {
 
