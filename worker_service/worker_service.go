@@ -48,21 +48,20 @@ type Message struct {
 	Command string
 	Data    *Command
 }
-
 type Stock struct {
-	name string
-	cost float64
+	Name  string  `json:"stock"`
+	Price float64 `json:"price"`
 }
 
 type User struct {
 	Balance float64
-	Stocks  map[string]*Stock
+	Stocks  map[string]*StockQuantity
 }
 
 func NewUser() *User {
 	return &User{
 		Balance: float64(0),
-		Stocks:  make(map[string]*Stock, 0),
+		Stocks:  make(map[string]*StockQuantity, 0),
 	}
 }
 
@@ -79,7 +78,7 @@ func dispatch(cmd Command) (CMD, error) {
 		},
 		notifyBUY: func(cmd Command) (CMD, error) {
 			a, err := strconv.ParseFloat(cmd.Args[2], 64)
-			return BUY{ticket: int64(cmd.Ticket), userId: cmd.Args[0], stock: cmd.Args[1], amount: a, cost: 0}, err
+			return BUY{ticket: int64(cmd.Ticket), userId: cmd.Args[0], stock: cmd.Args[1], amount: a}, err
 		},
 		notifyCOMMIT_BUY: func(cmd Command) (CMD, error) {
 			return &COMMIT_BUY{ticket: int64(cmd.Ticket), userId: cmd.Args[0]}, nil
@@ -88,8 +87,8 @@ func dispatch(cmd Command) (CMD, error) {
 			return &CANCEL_BUY{ticket: int64(cmd.Ticket), userId: cmd.Args[0]}, nil
 		},
 		notifySELL: func(cmd Command) (CMD, error) {
-			a, _ := strconv.ParseFloat(cmd.Args[1], 64)
-			return &SELL{ticket: int64(cmd.Ticket), userId: cmd.Args[0], stock: cmd.Args[1], amount: a, cost: 0}, nil
+			a, err := strconv.ParseFloat(cmd.Args[2], 64)
+			return SELL{ticket: int64(cmd.Ticket), userId: cmd.Args[0], stock: cmd.Args[1], amount: a}, err
 		},
 		notifyCOMMIT_SELL: func(cmd Command) (CMD, error) {
 			return &COMMIT_SELL{ticket: int64(cmd.Ticket), userId: cmd.Args[0]}, nil
@@ -158,10 +157,10 @@ func getNextCommand(conn *websocket.Conn) (*Message, error) {
 			return message, nil
 		} else if message.Command == "EMPTY" {
 			// Empty, wait and try again
-			time.Sleep(time.Millisecond * 50)
+			// time.Sleep(time.Millisecond * 1)
 		} else {
 			log.Println("Unknown Request")
-			time.Sleep(time.Millisecond * 50)
+			// time.Sleep(time.Millisecond * 1)
 		}
 
 		if err != nil {
@@ -174,8 +173,9 @@ func getNextCommand(conn *websocket.Conn) (*Message, error) {
 // Used for logging anything related to a users account
 func sendAccountLog(n *Notification, bal float64) {
 	a := account_log{
-		Username:     n.Userid,
-		Funds:        fmt.Sprint(bal),
+		Username: n.Userid,
+		// Funds:        fmt.Sprint(bal),
+		Funds:        fmt.Sprint(*n.Amount),
 		Ticketnumber: int(n.Ticket),
 		Action:       []string{n.Topic},
 	}
@@ -189,20 +189,23 @@ func sendAccountLog(n *Notification, bal float64) {
 }
 
 // User command logs
-func sendUserLog(n *Notification) {
-	var money string
-	if users[userid(n.Userid)] == nil {
-		money = "0"
-	} else {
-		money = fmt.Sprint(users[userid(n.Userid)].Balance)
-	}
-	u := user_log{
-		Username:     n.Userid,
-		Funds:        money,
-		Ticketnumber: int(n.Ticket),
-		Command:      []string{n.Topic},
-	}
+func sendUserLog(n Notification) {
+	var u user_log
+	if n.Amount == nil {
+		u = user_log{
+			Username:     n.Userid,
+			Ticketnumber: int(n.Ticket),
+			Command:      []string{n.Topic},
+		}
 
+	} else {
+		u = user_log{
+			Username:     n.Userid,
+			Funds:        fmt.Sprint(*n.Amount),
+			Ticketnumber: int(n.Ticket),
+			Command:      []string{n.Topic},
+		}
+	}
 	ulog, _ := json.Marshal(u)
 	bodyReader := bytes.NewReader(ulog)
 	_, err := http.Post("http://10.9.0.9:8004/userlog", "application/json", bodyReader)
@@ -212,27 +215,31 @@ func sendUserLog(n *Notification) {
 }
 
 // Not currently used
-func sendSystemLog(n *Notification) {
-	s := system_log{
-		Username:     n.Userid,
-		Funds:        fmt.Sprint(users[userid(n.Userid)].Balance),
-		Ticketnumber: int(n.Ticket),
-		Command:      []string{n.Topic},
-	}
-	ulog, _ := json.Marshal(s)
-	bodyReader := bytes.NewReader(ulog)
-	_, err := http.Post("http://10.9.0.9:8004/systemlog", "application/json", bodyReader)
-	if err != nil {
-		log.Fatal(err)
+// func sendSystemLog(n *Notification) {
+// 	s := system_log{
+// 		Username: n.Userid,
+// 		// Funds:        fmt.Sprint(users[userid(n.Userid)].Balance),
+// 		Ticketnumber: int(n.Ticket),
+// 		Command:      []string{n.Topic},
+// 	}
+// 	ulog, _ := json.Marshal(s)
+// 	bodyReader := bytes.NewReader(ulog)
+// 	_, err := http.Post("http://10.9.0.9:8004/systemlog", "application/json", bodyReader)
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
+// }
+
+// Logs incomming commands
+func commandLogger(nch <-chan Notification) {
+	for {
+		sendUserLog(<-nch)
 	}
 }
 
-// Logs incomming commands
-func commandLogger(nch chan *Notification) {
-	for {
-		n := <-nch
-		sendUserLog(n)
-	}
+type StockQuantity struct {
+	StockName string
+	Quantity  int64
 }
 
 // TODO clean this up there is so much repreated code
@@ -243,8 +250,16 @@ func UserAccountManager(mb *MessageBus) {
 	buy := mb.SubscribeAll(notifyCOMMIT_BUY)
 	sell := mb.SubscribeAll(notifyCOMMIT_SELL)
 
+	stockPrice := mb.SubscribeAll(notifySTOCK_PRICE)
+
+	// We need a starting price before we can start these operations
+	tprice := <-stockPrice
+
+	price := *tprice.Amount
 	for {
 		select {
+		case t2price := <-stockPrice:
+			price = *t2price.Amount
 		case newMoney := <-add:
 			uid := userid(newMoney.Userid)
 
@@ -263,12 +278,18 @@ func UserAccountManager(mb *MessageBus) {
 			}
 
 			if users[uid].Stocks[*newMoney.Stock] == nil {
-				log.Fatalln("Trying to sell stock user doesn't own", *newMoney.Stock)
+				fmt.Print("ERROR: Trying to sell stock user doesn't own", *newMoney.Stock, " for price ", price)
+				continue
 			}
 
 			users[uid].Balance += *newMoney.Amount
-			users[uid].Stocks[*newMoney.Stock] = nil
+			users[uid].Stocks[*newMoney.Stock].Quantity -= int64(*newMoney.Amount / price)
+			if users[uid].Stocks[*newMoney.Stock].Quantity < 0 {
+				fmt.Print("less than 0 stock available", *newMoney.Stock, *newMoney.Stock, " for price ", price)
+				continue
+			}
 			newMoney.Topic = "add"
+			fmt.Println("selling")
 			sendAccountLog(&newMoney, users[uid].Balance)
 		case newMoney := <-buy:
 			uid := userid(newMoney.Userid)
@@ -278,13 +299,18 @@ func UserAccountManager(mb *MessageBus) {
 			}
 
 			if users[uid].Balance < *newMoney.Amount {
-				log.Fatalln("Negative balance is not allowed", *newMoney.Stock)
+				fmt.Print("Negative balance is not allowed during buy for ", *newMoney.Stock, " for price ", price)
+				continue
 			}
 
 			users[uid].Balance -= *newMoney.Amount
-			users[uid].Stocks[*newMoney.Stock] = &Stock{
-				name: *newMoney.Stock,
-				cost: float64(0),
+			if users[uid].Stocks[*newMoney.Stock] == nil {
+				users[uid].Stocks[*newMoney.Stock] = &StockQuantity{
+					StockName: *newMoney.Stock,
+					Quantity:  int64(*newMoney.Amount / price),
+				}
+			} else {
+				users[uid].Stocks[*newMoney.Stock].Quantity += int64(*newMoney.Amount / price)
 			}
 			newMoney.Topic = "remove"
 			sendAccountLog(&newMoney, users[uid].Balance)
@@ -292,16 +318,76 @@ func UserAccountManager(mb *MessageBus) {
 	}
 }
 
+func getQuote(stock string) Stock {
+	var stonks Stock
+	rsp, err := http.Get("http://10.9.0.6:8002")
+	if err != nil {
+		log.Fatal(err)
+	}
+	body, err := ioutil.ReadAll(rsp.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+	json.Unmarshal(body, &stonks)
+	log.Print(stonks)
+	return stonks
+}
+
+func monitorStock(stockName string, mb *MessageBus) {
+	for {
+		S := getQuote(stockName)
+		mb.Publish(notifySTOCK_PRICE, Notification{
+			time.Now(),
+			notifySTOCK_PRICE,
+			-1,
+			"",
+			&S.Name,
+			&S.Price,
+		})
+		time.Sleep(time.Millisecond * 1000)
+	}
+}
+func stockMonitor(mb *MessageBus) {
+	monitoredStocks := make(map[string]*string)
+	buy := mb.SubscribeAll(notifyBUY)
+	sell := mb.SubscribeAll(notifySELL)
+	select {
+	case stock := <-sell:
+		if monitoredStocks[*stock.Stock] == nil {
+			monitoredStocks[*stock.Stock] = stock.Stock
+			go monitorStock(*stock.Stock, mb)
+		}
+
+	case stock := <-buy:
+		if monitoredStocks[*stock.Stock] == nil {
+			monitoredStocks[*stock.Stock] = stock.Stock
+			go monitorStock(*stock.Stock, mb)
+		}
+	}
+
+}
+
+func stockPrinter(mb *MessageBus) {
+	prices := mb.SubscribeAll(notifySTOCK_PRICE)
+	for {
+		price := <-prices
+		log.Println("Stock price of ", *price.Stock, " is ", Stock{
+			Name:  *price.Stock,
+			Price: *price.Amount,
+		})
+	}
+
+}
 func main() {
 
 	// Determine if we should use local host
 	var host string
 	if len(os.Args) > 1 {
 		host = "localhost"
-	} else {
-		host = "10.9.0.7"
 		// Disable logging by default
 		log.SetOutput(ioutil.Discard)
+	} else {
+		host = "10.9.0.7"
 	}
 	queueServiceConn, _, _ := websocket.DefaultDialer.Dial("ws://"+host+":8001/ws?", nil)
 	log.Println("Worker Service Starting...")
@@ -312,12 +398,42 @@ func main() {
 	// intended for updating the DB when used
 	ch := make(chan *Transaction)
 	// Used for logging commands when recieved
-	nch := make(chan *Notification)
+	// nch := make(chan *Notification)
 
-	// Logs all incoming commands
-	go commandLogger(nch)
 	// Logs all transactions to user accounts
 	go UserAccountManager(mb)
+	// Monitor the current stock value
+	go stockMonitor(mb)
+	// go stockPrinter(mb)
+	// Log the new command
+	notes := []string{
+		notifyADD,
+		notifyBUY,
+		notifySELL,
+		notifyCOMMIT_BUY,
+		notifyCOMMIT_SELL,
+		notifyCANCEL_BUY,
+		notifyCANCEL_SELL,
+		notifyCANCEL_SET_SELL,
+		notifySET_SELL_TRIGGER,
+		notifySET_SELL_AMOUNT,
+		notifySET_BUY_TRIGGER,
+		notifyCANCEL_BUY_TRIGGER,
+		notifySET_BUY_AMOUNT,
+	}
+	nch := make(chan Notification)
+	go commandLogger(nch)
+	for _, n := range notes {
+		val := n
+		c := mb.SubscribeAll(val)
+		go func() {
+			// Logs all incoming commands
+			for {
+				r := <-c
+				nch <- r
+			}
+		}()
+	}
 
 	for {
 		select {
@@ -327,17 +443,13 @@ func main() {
 			t, err := getNextCommand(queueServiceConn)
 			cmd, err := dispatch(*t.Data)
 			if err == nil {
-				// Log the new command
-				go func() {
-					n := cmd.Notify()
-					nch <- &n
-				}()
 				// Execute this new command
 				go Run(cmd, mb, ch)
-				// Sleep is here to avoid blocking the queue server for too long
-				time.Sleep(time.Millisecond * 10)
+				// Sleep is here to avoid blocking the
+				// queue server for too long
+				// time.Sleep(time.Millisecond * 1)
 			} else {
-				log.Println("ERROR:", err)
+				fmt.Println("ERROR:", err)
 			}
 		}
 
