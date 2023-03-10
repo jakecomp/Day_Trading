@@ -64,6 +64,14 @@ type errorEvent struct {
 	Username     string   `xml:"username" json:"username"`
 }
 
+type dumplogEvent struct {
+	Timestamp    int64    `xml:"timestamp"`
+	ServerName   string   `xml:"server" json:"server"`
+	Ticketnumber int      `xml:"transactionNum" json:"ticketnumber"`
+	Command      []string `xml:"command" json:"command"`
+	Filename     string   `xml:"filename" json:"filename"`
+}
+
 var f *os.File
 
 //var ec *xmlwriter.ErrCollector
@@ -129,8 +137,30 @@ func handleRequests() {
 
 	http.HandleFunc("/errorlog", errorlog)
 
+	http.HandleFunc("/dumplog", dumplog)
+
 	log.Fatal(http.ListenAndServe(":8004", nil))
 
+}
+
+func dumplog(w http.ResponseWriter, r *http.Request) {
+
+	recive_log := &dumplogEvent{}
+	err := json.NewDecoder(r.Body).Decode(recive_log)
+	if err != nil {
+		// If there is something wrong with the request body, return a 400 status
+		fmt.Println("Error with request format")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	recive_log.Timestamp = timestamp()
+	recive_log.ServerName = "stoinks_server"
+	recive_log.Filename = "stocklog.xml"
+	//_ = xml.NewEncoder(*xmlwriter).Encode(recive_log)
+	out, _ := xml.MarshalIndent(recive_log, "", "\t")
+	//fmt.Println(string(out))
+	f.WriteString(string(out))
+	f.WriteString("\n")
 }
 
 func userlog(w http.ResponseWriter, r *http.Request) {
