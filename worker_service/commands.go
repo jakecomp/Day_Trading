@@ -8,7 +8,6 @@ package main
 // TODO assert timeframe for commit and cancel commands
 import (
 	"errors"
-	"fmt"
 	"log"
 	"reflect"
 	"time"
@@ -154,17 +153,17 @@ type BUY struct {
 // lookup user balance
 // if invalid balance return an error describing this
 func (b BUY) Prerequsite(mb *MessageBus) error {
-	ch := mb.Subscribe(notifyADD, userid(b.userId))
-	for n := range ch {
-		if n.Userid == b.userId {
-			if *n.Amount < b.amount {
-				return errors.New("Not enough money for this stock")
-			} else if n.Ticket < b.ticket {
-				return nil
-			}
-		}
-	}
-	return errors.New("Balance Channel Prematurely Closed")
+	// ch := mb.Subscribe(notifyADD, userid(b.userId))
+	// for n := range ch {
+	// 	if n.Userid == b.userId {
+	// 		if *n.Amount < b.amount {
+	// 			return errors.New("Not enough money for this stock")
+	// 		} else if n.Ticket < b.ticket {
+	return nil
+	// 		}
+	// 	}
+	// }
+	// return errors.New("Balance Channel Prematurely Closed")
 
 }
 
@@ -292,15 +291,16 @@ type CANCEL_BUY struct {
 }
 
 func (b *CANCEL_BUY) Prerequsite(mb *MessageBus) error {
-	ch := mb.Subscribe(notifyBUY, userid(b.userId))
+	// ch := mb.Subscribe(notifyBUY, userid(b.userId))
 
-	for n := range ch {
-		if n.Userid == b.userId && n.Ticket < b.ticket {
-			b.buy = n
-			return nil
-		}
-	}
-	return errors.New("Balance Channel Prematurely Closed")
+	// for n := range ch {
+	// 	if n.Userid == b.userId && n.Ticket < b.ticket {
+	// 		b.buy = n
+	// 		return nil
+	// 	}
+	// }
+	// return errors.New("Balance Channel Prematurely Closed")
+	return nil
 }
 
 func (b CANCEL_BUY) Execute(ch chan *Transaction) error {
@@ -347,19 +347,20 @@ type SELL struct {
 }
 
 func (s SELL) Prerequsite(mb *MessageBus) error {
-	// Wait for the user to buy this stock
-	ch := mb.Subscribe(notifyCOMMIT_BUY, userid(s.userId))
+	// // Wait for the user to buy this stock
+	// ch := mb.Subscribe(notifyCOMMIT_BUY, userid(s.userId))
 
-	for n := range ch {
-		if n.Userid == s.userId {
-			if *n.Amount < s.amount {
-				return errors.New(fmt.Sprintf("Don't have %f of %s", s.amount, s.stock))
-			} else {
-				return nil
-			}
-		}
-	}
-	return errors.New("Balance Channel Prematurely Closed")
+	// for n := range ch {
+	// 	if n.Userid == s.userId {
+	// 		// if *n.Amount > s.amount {
+	// 		// 	return errors.New(fmt.Sprintf("Don't have %f of %s", s.amount, s.stock))
+	// 		// } else {
+	// 		return nil
+	// 		// }
+	// 	}
+	// }
+	// return errors.New("Balance Channel Prematurely Closed")
+	return nil
 }
 func (b SELL) Execute(ch chan *Transaction) error {
 	return nil
@@ -437,8 +438,8 @@ func (s COMMIT_SELL) Execute(ch chan *Transaction) error {
 		User_id:        s.userId,
 		Command:        notifyCOMMIT_SELL,
 		Stock_id:       *s.sell.Stock,
-		Stock_price:    0,
-		Cash_value:     *s.sell.Amount,
+		Stock_price:    *s.sell.Amount,
+		Cash_value:     0,
 	}
 	return nil
 }
@@ -481,15 +482,16 @@ type CANCEL_SELL struct {
 }
 
 func (s *CANCEL_SELL) Prerequsite(mb *MessageBus) error {
-	ch := mb.Subscribe(notifySELL, userid(s.userId))
+	// ch := mb.Subscribe(notifySELL, userid(s.userId))
 
-	for n := range ch {
-		if n.Userid == s.userId && n.Ticket < s.ticket {
-			s.sell = n
-			return nil
-		}
-	}
-	return errors.New("Balance Channel Prematurely Closed")
+	// for n := range ch {
+	// 	if n.Userid == s.userId && n.Ticket < s.ticket {
+	// 		s.sell = n
+	// 		return nil
+	// 	}
+	// }
+	// return errors.New("Balance Channel Prematurely Closed")
+	return nil
 
 }
 

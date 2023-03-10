@@ -87,8 +87,8 @@ func dispatch(cmd Command) (CMD, error) {
 			return &CANCEL_BUY{ticket: int64(cmd.Ticket), userId: cmd.Args[0]}, nil
 		},
 		notifySELL: func(cmd Command) (CMD, error) {
-			a, _ := strconv.ParseFloat(cmd.Args[1], 64)
-			return &SELL{ticket: int64(cmd.Ticket), userId: cmd.Args[0], stock: cmd.Args[1], amount: a}, nil
+			a, err := strconv.ParseFloat(cmd.Args[2], 64)
+			return SELL{ticket: int64(cmd.Ticket), userId: cmd.Args[0], stock: cmd.Args[1], amount: a}, err
 		},
 		notifyCOMMIT_SELL: func(cmd Command) (CMD, error) {
 			return &COMMIT_SELL{ticket: int64(cmd.Ticket), userId: cmd.Args[0]}, nil
@@ -157,10 +157,10 @@ func getNextCommand(conn *websocket.Conn) (*Message, error) {
 			return message, nil
 		} else if message.Command == "EMPTY" {
 			// Empty, wait and try again
-			time.Sleep(time.Millisecond * 10)
+			// time.Sleep(time.Millisecond * 1)
 		} else {
 			log.Println("Unknown Request")
-			time.Sleep(time.Millisecond * 10)
+			// time.Sleep(time.Millisecond * 1)
 		}
 
 		if err != nil {
@@ -189,7 +189,7 @@ func sendAccountLog(n *Notification, bal float64) {
 }
 
 // User command logs
-func sendUserLog(n *Notification) {
+func sendUserLog(n Notification) {
 	var u user_log
 	if n.Amount == nil {
 		u = user_log{
@@ -231,10 +231,9 @@ func sendUserLog(n *Notification) {
 // }
 
 // Logs incomming commands
-func commandLogger(nch chan *Notification) {
+func commandLogger(nch <-chan Notification) {
 	for {
-		n := <-nch
-		sendUserLog(n)
+		sendUserLog(<-nch)
 	}
 }
 
@@ -279,15 +278,18 @@ func UserAccountManager(mb *MessageBus) {
 			}
 
 			if users[uid].Stocks[*newMoney.Stock] == nil {
-				log.Fatalln("Trying to sell stock user doesn't own", *newMoney.Stock)
+				fmt.Print("ERROR: Trying to sell stock user doesn't own", *newMoney.Stock, " for price ", price)
+				continue
 			}
 
 			users[uid].Balance += *newMoney.Amount
 			users[uid].Stocks[*newMoney.Stock].Quantity -= int64(*newMoney.Amount / price)
 			if users[uid].Stocks[*newMoney.Stock].Quantity < 0 {
-				log.Fatalln("less than 0 stock available", *newMoney.Stock)
+				fmt.Print("less than 0 stock available", *newMoney.Stock, *newMoney.Stock, " for price ", price)
+				continue
 			}
 			newMoney.Topic = "add"
+			fmt.Println("selling")
 			sendAccountLog(&newMoney, users[uid].Balance)
 		case newMoney := <-buy:
 			uid := userid(newMoney.Userid)
@@ -297,7 +299,8 @@ func UserAccountManager(mb *MessageBus) {
 			}
 
 			if users[uid].Balance < *newMoney.Amount {
-				log.Fatalln("Negative balance is not allowed", *newMoney.Stock)
+				fmt.Print("Negative balance is not allowed during buy for ", *newMoney.Stock, " for price ", price)
+				continue
 			}
 
 			users[uid].Balance -= *newMoney.Amount
@@ -381,10 +384,10 @@ func main() {
 	var host string
 	if len(os.Args) > 1 {
 		host = "localhost"
-	} else {
-		host = "10.9.0.7"
 		// Disable logging by default
 		log.SetOutput(ioutil.Discard)
+	} else {
+		host = "10.9.0.7"
 	}
 	queueServiceConn, _, _ := websocket.DefaultDialer.Dial("ws://"+host+":8001/ws?", nil)
 	log.Println("Worker Service Starting...")
@@ -395,10 +398,8 @@ func main() {
 	// intended for updating the DB when used
 	ch := make(chan *Transaction)
 	// Used for logging commands when recieved
-	nch := make(chan *Notification)
+	// nch := make(chan *Notification)
 
-	// Logs all incoming commands
-	go commandLogger(nch)
 	// Logs all transactions to user accounts
 	go UserAccountManager(mb)
 	// Monitor the current stock value
@@ -420,11 +421,17 @@ func main() {
 		notifyCANCEL_BUY_TRIGGER,
 		notifySET_BUY_AMOUNT,
 	}
+	nch := make(chan Notification)
+	go commandLogger(nch)
 	for _, n := range notes {
 		val := n
+		c := mb.SubscribeAll(val)
 		go func() {
-			pubbed := <-mb.SubscribeAll(val)
-			nch <- &pubbed
+			// Logs all incoming commands
+			for {
+				r := <-c
+				nch <- r
+			}
 		}()
 	}
 
@@ -440,9 +447,9 @@ func main() {
 				go Run(cmd, mb, ch)
 				// Sleep is here to avoid blocking the
 				// queue server for too long
-				time.Sleep(time.Millisecond * 10)
+				// time.Sleep(time.Millisecond * 1)
 			} else {
-				log.Println("ERROR:", err)
+				fmt.Println("ERROR:", err)
 			}
 		}
 
