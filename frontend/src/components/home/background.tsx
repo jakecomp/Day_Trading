@@ -13,6 +13,7 @@ export const HomeBackground = styled.div`
 export const NavbarBackground = styled.div`
     height: 72px;
     background-color: #fff;
+    box-shadow: 0 8px 24px 0 rgba(0, 0, 0, 0.05);
     display: flex;
     justify-content: space-between;
     padding: 10px 64px;
