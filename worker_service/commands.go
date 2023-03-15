@@ -7,11 +7,41 @@ package main
 // used for selling and buying
 // TODO assert timeframe for commit and cancel commands
 import (
+	"context"
 	"errors"
+	"fmt"
 	"log"
 	"reflect"
 	"time"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+var db *mongo.Client
+
+const database = "day_trading"
+
+func connect() (*mongo.Client, context.Context) {
+	clientOptions := options.Client()
+	clientOptions.ApplyURI("mongodb://admin:admin@10.9.0.3:27017")
+	// clientOptions.ApplyURI("mongodb://admin:admin@localhost:27017")
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	client, err := mongo.Connect(ctx, clientOptions)
+
+	if err != nil {
+		fmt.Println("Error connecting to DB")
+		panic(err)
+	}
+	return client, ctx
+}
+
+type user_doc struct {
+	Username string
+	Hash     string
+	Balance  float32
+}
 
 type Transaction struct {
 	Transaction_id int64
@@ -73,6 +103,65 @@ const (
 	notifySTOCK_PRICE        = "STOCK_PRICE"
 )
 
+func read_db(username string, add_command bool) (user_collection *user_doc) {
+
+	db, ctx := connect()
+
+	var err error
+	var result user_doc
+	err = db.Database(database).Collection("users").FindOne(ctx, bson.D{{"username", username}}).Decode(&result)
+
+	if err != nil {
+
+		if err.Error() == "mongo: no documents in result" && add_command {
+
+			var new_doc = new(user_doc)
+			new_doc.Username = username
+			new_doc.Hash = "unsecure_this_user_never_made_account_via_backend"
+			new_doc.Balance = 0
+
+			collection := db.Database(database).Collection("users")
+			_, err = collection.InsertOne(context.TODO(), new_doc)
+
+			if err != nil {
+				fmt.Println("Error inserting into db: ", err)
+				panic(err)
+			}
+
+			db.Disconnect(ctx)
+			return new_doc
+
+		} else {
+
+			fmt.Println("Error search for record: ", err)
+			panic(err)
+		}
+
+	}
+
+	db.Disconnect(ctx)
+	return &result
+}
+
+func update_db(new_doc *user_doc) {
+
+	db, ctx := connect()
+
+	var err error
+
+	collection := db.Database(database).Collection("users")
+
+	selected_user := bson.M{"username": new_doc.Username}
+	updated_user := bson.M{"$set": bson.M{"balance": new_doc.Balance}}
+	_, err = collection.UpdateOne(context.TODO(), selected_user, updated_user)
+	db.Disconnect(ctx)
+
+	if err != nil {
+		fmt.Println("Error inserting into db: ", err)
+		panic(err)
+	}
+}
+
 // Purpose:
 //
 //	Add the given amount of money to the user's account
@@ -119,6 +208,15 @@ func (a ADD) Execute(ch chan *Transaction) error {
 		Stock_id:       "",
 		Stock_price:    0,
 	}
+
+	fmt.Println(a.userId)
+	var user_account user_doc = *read_db(a.userId, true)
+	user_account.Balance = user_account.Balance + float32(a.amount)
+
+	if user_account.Balance == 0 {
+		fmt.Println("ADD ERROR! No update to balance")
+	}
+	update_db(&user_account)
 	return nil
 }
 
