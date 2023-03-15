@@ -33,6 +33,7 @@ type Credentials struct {
 type user_doc struct {
 	Username string
 	Hash     string
+	Balance  float32
 }
 
 type command struct {
@@ -91,6 +92,7 @@ func Signup(w http.ResponseWriter, r *http.Request) {
 	var doc = new(user_doc)
 	doc.Username = creds.Username
 	doc.Hash = string(hashedPassword)
+	doc.Balance = 0
 
 	// Save User Doc to MongoDB
 	collection := db.Database(database).Collection("users")

@@ -385,9 +385,11 @@ func main() {
 	if len(os.Args) > 1 {
 		host = "localhost"
 		// Disable logging by default
+		fmt.Println("WARNING! HOST SET AS LOCALHOST")
 		log.SetOutput(ioutil.Discard)
 	} else {
 		host = "10.9.0.7"
+		fmt.Println("HOST FOR WORKER SET AS " + host)
 	}
 	queueServiceConn, _, _ := websocket.DefaultDialer.Dial("ws://"+host+":8001/ws?", nil)
 	log.Println("Worker Service Starting...")
