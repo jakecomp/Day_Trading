@@ -26,8 +26,21 @@ import {
 } from '../components/home/containers'
 import { StatusCard, StocksCard, TradesCard } from '../components/home/card'
 import { Header1, Header2, Header3, Header4 } from '../components/atoms/fonts'
+import { SmallBlackButton } from '../components/atoms/button'
+import { useState } from 'react'
 
 export const Home = () => {
+    let popup
+    const [showPopup, setShowPopup] = useState(false)
+
+    const handleClick = () => {
+        setShowPopup(false)
+    }
+
+    if (showPopup) {
+        popup = <></>
+    }
+
     return (
         <div>
             <StickyContainer>
@@ -38,7 +51,7 @@ export const Home = () => {
                     </UserTextContainer>
                     <UserContainer>
                         <UserTextContainer>
-                            <Header2>John Smith</Header2>
+                            <Header2>John Smither</Header2>
                             <img src={user} />
                         </UserTextContainer>
                     </UserContainer>
@@ -85,32 +98,32 @@ export const Home = () => {
                                     <Header4>$$</Header4>
                                     <Header4>ABC Stocks</Header4>
                                     <AddSellContainer>
-                                        <Header4>Add</Header4>
-                                        <Header4>Sell</Header4>
+                                        <SmallBlackButton>Buy</SmallBlackButton>
+                                        <SmallBlackButton>Sell</SmallBlackButton>
                                     </AddSellContainer>
                                 </TradesComponentContainer>
                                 <TradesComponentContainer>
                                     <Header4>$$</Header4>
                                     <Header4>ABC Stocks</Header4>
                                     <AddSellContainer>
-                                        <Header4>Add</Header4>
-                                        <Header4>Sell</Header4>
+                                        <SmallBlackButton>Buy</SmallBlackButton>
+                                        <SmallBlackButton>Sell</SmallBlackButton>
                                     </AddSellContainer>
                                 </TradesComponentContainer>
                                 <TradesComponentContainer>
                                     <Header4>$$</Header4>
                                     <Header4>ABC Stocks</Header4>
                                     <AddSellContainer>
-                                        <Header4>Add</Header4>
-                                        <Header4>Sell</Header4>
+                                        <SmallBlackButton>Buy</SmallBlackButton>
+                                        <SmallBlackButton>Sell</SmallBlackButton>
                                     </AddSellContainer>
                                 </TradesComponentContainer>
                                 <TradesComponentContainer>
                                     <Header4>$$</Header4>
                                     <Header4>ABC Stocks</Header4>
                                     <AddSellContainer>
-                                        <Header4>Add</Header4>
-                                        <Header4>Sell</Header4>
+                                        <SmallBlackButton>Buy</SmallBlackButton>
+                                        <SmallBlackButton>Sell</SmallBlackButton>
                                     </AddSellContainer>
                                 </TradesComponentContainer>
                             </TradesContainer>
@@ -125,24 +138,24 @@ export const Home = () => {
                                     <Header4>$$</Header4>
                                     <Header4>ABC Stocks</Header4>
                                     <AddSellContainer>
-                                        <Header4>Add</Header4>
-                                        <Header4>Sell</Header4>
+                                        <SmallBlackButton>Buy</SmallBlackButton>
+                                        <SmallBlackButton>Sell</SmallBlackButton>
                                     </AddSellContainer>
                                 </StocksComponentContainer>
                                 <StocksComponentContainer>
                                     <Header4>$$</Header4>
                                     <Header4>ABC Stocks</Header4>
                                     <AddSellContainer>
-                                        <Header4>Add</Header4>
-                                        <Header4>Sell</Header4>
+                                        <SmallBlackButton>Buy</SmallBlackButton>
+                                        <SmallBlackButton>Sell</SmallBlackButton>
                                     </AddSellContainer>
                                 </StocksComponentContainer>
                                 <StocksComponentContainer>
                                     <Header4>$$</Header4>
                                     <Header4>ABC Stocks</Header4>
                                     <AddSellContainer>
-                                        <Header4>Add</Header4>
-                                        <Header4>Sell</Header4>
+                                        <SmallBlackButton>Buy</SmallBlackButton>
+                                        <SmallBlackButton>Sell</SmallBlackButton>
                                     </AddSellContainer>
                                 </StocksComponentContainer>
                             </StocksContainer>

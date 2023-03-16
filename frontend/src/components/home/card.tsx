@@ -14,7 +14,7 @@ export const StatusCard = styled.div`
 `
 
 export const TradesCard = styled.div`
-    width: 655px;
+    width: 613px;
     height: 637px;
     background-color: #ffffff;
     box-shadow: 0 8px 24px 0 rgba(0, 0, 0, 0.05);
@@ -22,7 +22,7 @@ export const TradesCard = styled.div`
 `
 
 export const StocksCard = styled.div`
-    width: 345px;
+    width: 387px;
     height: 637px;
     background-color: #ffffff;
     box-shadow: 0 8px 24px 0 rgba(0, 0, 0, 0.05);

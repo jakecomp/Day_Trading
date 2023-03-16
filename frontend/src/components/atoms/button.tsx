@@ -1,6 +1,6 @@
 import styled from '@emotion/styled'
 
-export const BigBlackButton = styled.button`
+export const BigBlackButton = styled.div`
     width: 498px;
     padding: 12px 24px;
     background-color: #000000;
@@ -15,4 +15,13 @@ export const BigBlackButton = styled.button`
     &:hover {
         background-color: #374092;
     }
+`
+
+export const SmallBlackButton = styled(BigBlackButton)`
+    width: 42px;
+    height: 20px;
+    padding: 0px 16px;
+    font-family: Monsterrat-Medium;
+    font-size: 16px;
+    color: #ffffff;
 `

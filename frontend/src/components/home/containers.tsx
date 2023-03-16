@@ -91,5 +91,5 @@ export const StocksContainer = styled(TradesContainer)`
     gap: 8px;
 `
 export const StocksComponentContainer = styled(TradesComponentContainer)`
-    width: 295px;
+    width: 358px;
 `
