@@ -8,6 +8,6 @@ do
     stock_name=$(printf '%s\n' "$content" |jq -r '.price')
     #stock_price=$(jq -r '.price' <<<"$content") 
     echo $content
-    redis-cli -h 10.9.0.10 -p 6379 SET stock_name stock_price
+    redis-cli -h 10.9.0.11 -p 6379 SET stock_name stock_price
     sleep 5
 done

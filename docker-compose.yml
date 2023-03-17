@@ -36,11 +36,11 @@ services:
   quote_cache: 
     build: ./quote_cache 
     ports: 
-      - 6379:6379  
+      - "6379:6379"
     depends_on: [quote_server]
     networks: 
       net-10.9.0.0: 
-        ipv4_address: 10.9.0.10
+        ipv4_address: 10.9.0.11
 
   queue_service:
     build: ./queue_service
