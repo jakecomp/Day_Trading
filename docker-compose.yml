@@ -31,7 +31,16 @@ services:
       - "8002:8002"
     networks:
       net-10.9.0.0:
-        ipv4_address: 10.9.0.6
+        ipv4_address: 10.9.0.6 
+
+  quote_cache: 
+    build: ./quote_cache 
+    ports: 
+      - 6379:6379  
+    depends_on: [quote_server]
+    networks: 
+      net-10.9.0.0: 
+        ipv4_address: 10.9.0.10
 
   queue_service:
     build: ./queue_service
