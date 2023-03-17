@@ -270,6 +270,11 @@ func UserAccountManager(mb *MessageBus) {
 			users[uid].Balance += *newMoney.Amount
 			newMoney.Topic = "add"
 			sendAccountLog(&newMoney, users[uid].Balance)
+
+			var current_user_doc = *read_db(string(uid), true)
+			current_user_doc.Balance += float32(*newMoney.Amount)
+			update_db(&current_user_doc)
+
 		case newMoney := <-sell:
 			uid := userid(newMoney.Userid)
 
@@ -291,6 +296,12 @@ func UserAccountManager(mb *MessageBus) {
 			newMoney.Topic = "add"
 			fmt.Println("selling")
 			sendAccountLog(&newMoney, users[uid].Balance)
+
+			var current_user_doc = *read_db(string(uid), false)
+			current_user_doc.Balance += float32(*newMoney.Amount)
+			current_user_doc.Stonks[*newMoney.Stock] -= int(*newMoney.Amount / price)
+			update_db(&current_user_doc)
+
 		case newMoney := <-buy:
 			uid := userid(newMoney.Userid)
 
@@ -304,16 +315,23 @@ func UserAccountManager(mb *MessageBus) {
 			}
 
 			users[uid].Balance -= *newMoney.Amount
+
+			var current_user_doc = *read_db(string(uid), false)
+			current_user_doc.Balance -= float32(*newMoney.Amount)
 			if users[uid].Stocks[*newMoney.Stock] == nil {
 				users[uid].Stocks[*newMoney.Stock] = &StockQuantity{
 					StockName: *newMoney.Stock,
 					Quantity:  int64(*newMoney.Amount / price),
 				}
+
+				current_user_doc.Stonks[*newMoney.Stock] = int(*newMoney.Amount / price)
 			} else {
 				users[uid].Stocks[*newMoney.Stock].Quantity += int64(*newMoney.Amount / price)
+				current_user_doc.Stonks[*newMoney.Stock] += int(*newMoney.Amount / price)
 			}
 			newMoney.Topic = "remove"
 			sendAccountLog(&newMoney, users[uid].Balance)
+			update_db(&current_user_doc)
 		}
 	}
 }

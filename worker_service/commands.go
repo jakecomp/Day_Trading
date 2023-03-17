@@ -41,6 +41,12 @@ type user_doc struct {
 	Username string
 	Hash     string
 	Balance  float32
+	Stonks   map[string]int
+}
+
+type quote struct {
+	Stock string  `json:"stock"`
+	Price float64 `json:"price"`
 }
 
 type Transaction struct {
@@ -119,6 +125,7 @@ func read_db(username string, add_command bool) (user_collection *user_doc) {
 			new_doc.Username = username
 			new_doc.Hash = "unsecure_this_user_never_made_account_via_backend"
 			new_doc.Balance = 0
+			new_doc.Stonks = make(map[string]int)
 
 			collection := db.Database(database).Collection("users")
 			_, err = collection.InsertOne(context.TODO(), new_doc)
@@ -152,7 +159,7 @@ func update_db(new_doc *user_doc) {
 	collection := db.Database(database).Collection("users")
 
 	selected_user := bson.M{"username": new_doc.Username}
-	updated_user := bson.M{"$set": bson.M{"balance": new_doc.Balance}}
+	updated_user := bson.M{"$set": bson.M{"balance": new_doc.Balance, "stonks": new_doc.Stonks}}
 	_, err = collection.UpdateOne(context.TODO(), selected_user, updated_user)
 	db.Disconnect(ctx)
 
@@ -208,15 +215,6 @@ func (a ADD) Execute(ch chan *Transaction) error {
 		Stock_id:       "",
 		Stock_price:    0,
 	}
-
-	fmt.Println(a.userId)
-	var user_account user_doc = *read_db(a.userId, true)
-	user_account.Balance = user_account.Balance + float32(a.amount)
-
-	if user_account.Balance == 0 {
-		fmt.Println("ADD ERROR! No update to balance")
-	}
-	update_db(&user_account)
 	return nil
 }
 
