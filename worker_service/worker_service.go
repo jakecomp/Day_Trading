@@ -292,7 +292,7 @@ func UserAccountManager(mb *MessageBus) {
 
 			if &current_user_doc == nil {
 				db, ctx := connect()
-				current_user_doc = *read_db(string(uid), true, db, ctx)
+				current_user_doc = *read_db(string(uid), false, db, ctx)
 			}
 
 			current_user_doc.Balance += float32(*newMoney.Amount)
@@ -317,7 +317,7 @@ func UserAccountManager(mb *MessageBus) {
 
 			if &current_user_doc == nil {
 				db, ctx := connect()
-				current_user_doc = *read_db(string(uid), true, db, ctx)
+				current_user_doc = *read_db(string(uid), false, db, ctx)
 			}
 
 			current_user_doc.Balance -= float32(*newMoney.Amount)
