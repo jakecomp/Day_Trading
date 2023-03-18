@@ -257,6 +257,12 @@ func UserAccountManager(mb *MessageBus) {
 			sendAccountLog(&newMoney, users[uid].Balance)
 
 			var current_user_doc = *read_db(string(uid), true, db, ctx)
+
+			if &current_user_doc == nil {
+				db, ctx := connect()
+				current_user_doc = *read_db(string(uid), true, db, ctx)
+			}
+
 			current_user_doc.Balance += float32(*newMoney.Amount)
 			update_db(&current_user_doc, db, ctx)
 
@@ -283,6 +289,12 @@ func UserAccountManager(mb *MessageBus) {
 			sendAccountLog(&newMoney, users[uid].Balance)
 
 			var current_user_doc = *read_db(string(uid), false, db, ctx)
+
+			if &current_user_doc == nil {
+				db, ctx := connect()
+				current_user_doc = *read_db(string(uid), true, db, ctx)
+			}
+
 			current_user_doc.Balance += float32(*newMoney.Amount)
 			current_user_doc.Stonks[*newMoney.Stock] -= int(*newMoney.Amount / price)
 			update_db(&current_user_doc, db, ctx)
@@ -302,6 +314,12 @@ func UserAccountManager(mb *MessageBus) {
 			users[uid].Balance -= *newMoney.Amount
 
 			var current_user_doc = *read_db(string(uid), false, db, ctx)
+
+			if &current_user_doc == nil {
+				db, ctx := connect()
+				current_user_doc = *read_db(string(uid), true, db, ctx)
+			}
+
 			current_user_doc.Balance -= float32(*newMoney.Amount)
 			if users[uid].Stocks[*newMoney.Stock] == nil {
 				users[uid].Stocks[*newMoney.Stock] = &StockQuantity{

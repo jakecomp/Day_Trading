@@ -27,7 +27,7 @@ func connect() (*mongo.Client, context.Context) {
 	clientOptions := options.Client()
 	clientOptions.ApplyURI("mongodb://admin:admin@10.9.0.3:27017")
 	// clientOptions.ApplyURI("mongodb://admin:admin@localhost:27017")
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 1*time.Hour)
 	client, err := mongo.Connect(ctx, clientOptions)
 
 	if err != nil {
@@ -129,11 +129,11 @@ func read_db(username string, add_command bool, db *mongo.Client, ctx context.Co
 			_, err = collection.InsertOne(context.TODO(), new_doc)
 
 			if err != nil {
-				fmt.Println("Error inserting into db: ", err)
+				fmt.Println("Error adding user to db: ", err)
 				panic(err)
 			}
 
-			db.Disconnect(ctx)
+			//defer db.Disconnect(ctx)
 			return new_doc
 
 		} else {
