@@ -7,6 +7,7 @@ import lable from '../assets/logo/lable_duotone.svg'
 import paper from '../assets/logo/Paper_duotone_line.svg'
 import user from '../assets/logo/User_circle.svg'
 import stats from '../assets/logo/stock-market-blue.png'
+import exit from '../assets/logo/Close_round_light.svg'
 import {
     DataContainer,
     DataTextContainer,
@@ -26,20 +27,16 @@ import {
 } from '../components/home/containers'
 import { StatusCard, StocksCard, TradesCard } from '../components/home/card'
 import { Header1, Header2, Header3, Header4 } from '../components/atoms/fonts'
-import { SmallBlackButton } from '../components/atoms/button'
+import { BigBlackButton, SmallBlackButton } from '../components/atoms/button'
 import { useState } from 'react'
+import { BuyPopUp } from '../components/popups/homePopup'
+import { InputLabel, SignField } from '../components/sign_in/field'
+import { InputContainer } from '../components/sign_in/containers'
+import { CloseContainer } from '../components/popups/containers'
 
 export const Home = () => {
-    let popup
-    const [showPopup, setShowPopup] = useState(false)
-
-    const handleClick = () => {
-        setShowPopup(false)
-    }
-
-    if (showPopup) {
-        popup = <></>
-    }
+    const [buyPopup, setBuyPopup] = useState(false)
+    const [sellPopup, setSellPopup] = useState(false)
 
     return (
         <div>
@@ -98,7 +95,7 @@ export const Home = () => {
                                     <Header4>$$</Header4>
                                     <Header4>ABC Stocks</Header4>
                                     <AddSellContainer>
-                                        <SmallBlackButton>Buy</SmallBlackButton>
+                                        <SmallBlackButton onClick={() => setBuyPopup(true)}>Buy</SmallBlackButton>
                                         <SmallBlackButton>Sell</SmallBlackButton>
                                     </AddSellContainer>
                                 </TradesComponentContainer>
@@ -163,6 +160,21 @@ export const Home = () => {
                     </StocksCard>
                 </BottomContainer>
             </HomeBackground>
+            <BuyPopUp trigger={buyPopup}>
+                <CloseContainer>
+                    <img src={exit} style={{ width: '40px' }} onClick={() => setBuyPopup(false)} />
+                </CloseContainer>
+                <Header3>Stock abc buy</Header3>
+                <InputContainer>
+                    <InputLabel>Buy more</InputLabel>
+                    <SignField></SignField>
+                    <InputLabel>Automatic Buy</InputLabel>
+                    <SignField placeholder='Set amount'></SignField>
+                </InputContainer>
+                <BigBlackButton style={{ width: '100px', height: '40px' }} onClick={() => setBuyPopup(false)}>
+                    Buy
+                </BigBlackButton>
+            </BuyPopUp>
         </div>
     )
 }

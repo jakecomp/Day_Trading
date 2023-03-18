@@ -8,8 +8,14 @@ import { FieldForm, InputLabel, SignField } from '../components/sign_in/field'
 import { useForm } from 'react-hook-form'
 import { SimpleLink } from '../components/atoms/links'
 import { Link } from 'react-router-dom'
+import { SignInPopUp } from '../components/popups/signinpopup'
+import { Header3, Header4 } from '../components/atoms/fonts'
+import { useState } from 'react'
 
 export const SignIn = () => {
+
+    const [buttonPopup, setButtonPopup] = useState(false)
+    
     interface signForm {
         username: string
         password: string
@@ -18,7 +24,9 @@ export const SignIn = () => {
     let socket: WebSocket
 
     const { register, handleSubmit } = useForm<signForm>({ mode: 'onSubmit' })
+    
     const RetrieveData = (data: signForm) => {
+        console.log(data)
         const report = {
             username: data.username,
             password: data.password,
@@ -57,7 +65,7 @@ export const SignIn = () => {
                             <InputLabel>Password</InputLabel>
                             <SignField type='password' {...register('password')}></SignField>{' '}
                         </InputContainer>
-                    <SimpleLink to='/home'><BigBlackButton>Sign in</BigBlackButton> </SimpleLink>
+                    <BigBlackButton onClick={() => setButtonPopup(true)}>Sign in</BigBlackButton>
                     </FieldForm>
                     <LinkContainer>
                         <SignInText>New to Day-trades?</SignInText>
@@ -65,6 +73,12 @@ export const SignIn = () => {
                     </LinkContainer>
                 </Card>
             </SignBackground>
+            <SignInPopUp trigger = {buttonPopup}>
+                <Header3>You are logged in!</Header3>
+                <SimpleLink to='/home'>
+                    <BigBlackButton style={{width: '300px'}}>Go to Home</BigBlackButton>
+                </SimpleLink>
+            </SignInPopUp>
         </div>
     )
 }

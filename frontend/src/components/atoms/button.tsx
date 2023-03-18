@@ -1,8 +1,9 @@
 import styled from '@emotion/styled'
 
-export const BigBlackButton = styled.div`
+export const BigBlackButton = styled.button`
     width: 498px;
     padding: 12px 24px;
+    border: 2px;
     background-color: #000000;
     border-radius: 8px;
     display: flex;
@@ -18,7 +19,7 @@ export const BigBlackButton = styled.div`
 `
 
 export const SmallBlackButton = styled(BigBlackButton)`
-    width: 42px;
+    width: 72px;
     height: 20px;
     padding: 0px 16px;
     font-family: Monsterrat-Medium;
