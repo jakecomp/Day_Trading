@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/streadway/amqp"
 )
 
 type userid string
@@ -136,36 +137,16 @@ func pushCommand(conn *websocket.Conn, t *Command) error {
 }
 
 // TODO avoid this blocking for to avoid unnecssecary blocking on main thread
-func getNextCommand(conn *websocket.Conn) (*Message, error) {
+func getNextCommand(msgs <-chan amqp.Delivery) (*Command, error) {
 	for {
 		// Attempt Dequeue
-		message := &Message{"DEQUEUE", nil}
-		msg, err := json.Marshal(message)
-		err = conn.WriteMessage(websocket.TextMessage, msg)
-
-		_, resp, err := conn.ReadMessage()
+		resp := <-msgs
+		var cmd Command
+		err := json.Unmarshal(resp.Body, &cmd)
 		if err != nil {
 			return nil, err
 		}
-
-		err = json.Unmarshal(resp, message)
-
-		if message.Command == "SUCCESS" {
-			//log.Println("Received: ", message)
-			//transaction := message.Data
-			//log.Println("Command: ", transaction)
-			return message, nil
-		} else if message.Command == "EMPTY" {
-			// Empty, wait and try again
-			// time.Sleep(time.Millisecond * 1)
-		} else {
-			log.Println("Unknown Request")
-			// time.Sleep(time.Millisecond * 1)
-		}
-
-		if err != nil {
-			return nil, err
-		}
+		return &cmd, nil
 	}
 
 }
@@ -256,6 +237,10 @@ func UserAccountManager(mb *MessageBus) {
 	tprice := <-stockPrice
 
 	price := *tprice.Amount
+
+	db, ctx := connect()
+	defer db.Disconnect(ctx)
+
 	for {
 		select {
 		case t2price := <-stockPrice:
@@ -271,9 +256,9 @@ func UserAccountManager(mb *MessageBus) {
 			newMoney.Topic = "add"
 			sendAccountLog(&newMoney, users[uid].Balance)
 
-			var current_user_doc = *read_db(string(uid), true)
+			var current_user_doc = *read_db(string(uid), true, db, ctx)
 			current_user_doc.Balance += float32(*newMoney.Amount)
-			update_db(&current_user_doc)
+			update_db(&current_user_doc, db, ctx)
 
 		case newMoney := <-sell:
 			uid := userid(newMoney.Userid)
@@ -297,10 +282,10 @@ func UserAccountManager(mb *MessageBus) {
 			fmt.Println("selling")
 			sendAccountLog(&newMoney, users[uid].Balance)
 
-			var current_user_doc = *read_db(string(uid), false)
+			var current_user_doc = *read_db(string(uid), false, db, ctx)
 			current_user_doc.Balance += float32(*newMoney.Amount)
 			current_user_doc.Stonks[*newMoney.Stock] -= int(*newMoney.Amount / price)
-			update_db(&current_user_doc)
+			update_db(&current_user_doc, db, ctx)
 
 		case newMoney := <-buy:
 			uid := userid(newMoney.Userid)
@@ -316,7 +301,7 @@ func UserAccountManager(mb *MessageBus) {
 
 			users[uid].Balance -= *newMoney.Amount
 
-			var current_user_doc = *read_db(string(uid), false)
+			var current_user_doc = *read_db(string(uid), false, db, ctx)
 			current_user_doc.Balance -= float32(*newMoney.Amount)
 			if users[uid].Stocks[*newMoney.Stock] == nil {
 				users[uid].Stocks[*newMoney.Stock] = &StockQuantity{
@@ -331,7 +316,7 @@ func UserAccountManager(mb *MessageBus) {
 			}
 			newMoney.Topic = "remove"
 			sendAccountLog(&newMoney, users[uid].Balance)
-			update_db(&current_user_doc)
+			update_db(&current_user_doc, db, ctx)
 		}
 	}
 }
@@ -396,27 +381,77 @@ func stockPrinter(mb *MessageBus) {
 	}
 
 }
-func main() {
 
+func failOnError(err error, msg string) {
+	if err != nil {
+		log.Fatalf("%s: %s", msg, err)
+	}
+}
+
+func setupListeners(conn *amqp.Connection) (amqp.Queue, *amqp.Channel) {
+	// Create a channel
+	ch, err := conn.Channel()
+	failOnError(err, "Failed to open a channel")
+
+	// Declare a queue
+	q, err := ch.QueueDeclare(
+		"worker", // Queue name
+		false,    // Durable
+		false,    // Delete when unused
+		false,    // Exclusive
+		false,    // No-wait
+		nil,      // Arguments
+	)
+	failOnError(err, "Failed to declare a queue")
+	return q, ch
+}
+func dial(url string) (*amqp.Connection, error) {
+	for {
+		conn, err := amqp.Dial("amqp://guest:guest@10.9.0.10:5672/")
+		if err == nil {
+			return conn, err
+		}
+		time.Sleep(time.Second * 3)
+	}
+
+}
+func main() {
 	// Determine if we should use local host
 	var host string
 	if len(os.Args) > 1 {
 		host = "localhost"
 		// Disable logging by default
 		fmt.Println("WARNING! HOST SET AS LOCALHOST")
-		log.SetOutput(ioutil.Discard)
 	} else {
 		host = "10.9.0.7"
 		fmt.Println("HOST FOR WORKER SET AS " + host)
+		log.SetOutput(ioutil.Discard)
 	}
-	queueServiceConn, _, _ := websocket.DefaultDialer.Dial("ws://"+host+":8001/ws?", nil)
-	log.Println("Worker Service Starting...")
+	// Connect to RabbitMQ server
+	conn, err := dial("amqp://guest:guest@10.9.0.10:5672/")
+	failOnError(err, "Failed to connect to RabbitMQ")
+	defer conn.Close()
+
+	q, ch := setupListeners(conn)
+	defer ch.Close()
+
+	// Consume messages from the queue
+	msgs, err := ch.Consume(
+		q.Name,           // Queue name
+		"worker_service", // Consumer name
+		true,             // Auto-acknowledge
+		false,            // Exclusive
+		false,            // No-local
+		false,            // No-wait
+		nil,              // Arguments
+	)
+	failOnError(err, "Failed to register a consumer")
 
 	// Message bus shared between commands
 	mb := NewMessageBus()
 
 	// intended for updating the DB when used
-	ch := make(chan *Transaction)
+	// ch := make(chan *Transaction)
 	// Used for logging commands when recieved
 	// nch := make(chan *Notification)
 
@@ -457,14 +492,12 @@ func main() {
 
 	for {
 		select {
-		case tra := <-ch:
-			log.Println("pushing new transaction ", tra)
 		default:
-			t, err := getNextCommand(queueServiceConn)
-			cmd, err := dispatch(*t.Data)
+			t, err := getNextCommand(msgs)
+			cmd, err := dispatch(*t)
 			if err == nil {
 				// Execute this new command
-				go Run(cmd, mb, ch)
+				go Run(cmd, mb)
 				// Sleep is here to avoid blocking the
 				// queue server for too long
 				// time.Sleep(time.Millisecond * 1)

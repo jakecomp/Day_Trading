@@ -65,15 +65,15 @@ type CMD interface {
 	Postrequsite(*MessageBus) error
 }
 
-func Run(c CMD, m *MessageBus, tchan chan *Transaction) {
-	log.Println("Executing prereq for ", reflect.TypeOf(c), c)
+func Run(c CMD, m *MessageBus) {
+	// log.Println("Executing prereq for ", reflect.TypeOf(c), c)
 	err := c.Prerequsite(m)
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println("Executed prereq for ", reflect.TypeOf(c), c)
-	log.Println("Executing ", reflect.TypeOf(c), c)
-	err = c.Execute(tchan)
+	// log.Println("Executed prereq for ", reflect.TypeOf(c), c)
+	// log.Println("Executing ", reflect.TypeOf(c), c)
+	// err = c.Execute(tchan)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -83,13 +83,13 @@ func Run(c CMD, m *MessageBus, tchan chan *Transaction) {
 		n := c.Notify()
 		m.Publish(n.Topic, n)
 	}()
-	log.Println("Notification sent for ", reflect.TypeOf(c), c)
-	log.Println("Executing Postreq for ", reflect.TypeOf(c), c)
+	// log.Println("Notification sent for ", reflect.TypeOf(c), c)
+	// log.Println("Executing Postreq for ", reflect.TypeOf(c), c)
 	err = c.Postrequsite(m)
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println("Executed Postreq for ", reflect.TypeOf(c), c)
+	// log.Println("Executed Postreq for ", reflect.TypeOf(c), c)
 }
 
 const (
@@ -109,9 +109,7 @@ const (
 	notifySTOCK_PRICE        = "STOCK_PRICE"
 )
 
-func read_db(username string, add_command bool) (user_collection *user_doc) {
-
-	db, ctx := connect()
+func read_db(username string, add_command bool, db *mongo.Client, ctx context.Context) (user_collection *user_doc) {
 
 	var err error
 	var result user_doc
@@ -145,14 +143,10 @@ func read_db(username string, add_command bool) (user_collection *user_doc) {
 		}
 
 	}
-
-	db.Disconnect(ctx)
 	return &result
 }
 
-func update_db(new_doc *user_doc) {
-
-	db, ctx := connect()
+func update_db(new_doc *user_doc, db *mongo.Client, ctx context.Context) {
 
 	var err error
 
@@ -161,7 +155,6 @@ func update_db(new_doc *user_doc) {
 	selected_user := bson.M{"username": new_doc.Username}
 	updated_user := bson.M{"$set": bson.M{"balance": new_doc.Balance, "stonks": new_doc.Stonks}}
 	_, err = collection.UpdateOne(context.TODO(), selected_user, updated_user)
-	db.Disconnect(ctx)
 
 	if err != nil {
 		fmt.Println("Error inserting into db: ", err)

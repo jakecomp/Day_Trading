@@ -47,7 +47,7 @@ func parseCmd(line string) (*Command, error) {
 }
 
 func parseCmds(r *bufio.Reader) chan Command {
-	c := make(chan Command)
+	c := make(chan Command, 500)
 	go func() {
 		for l, _, err := r.ReadLine(); err == nil; l, _, err = r.ReadLine() {
 			if err != nil {
@@ -143,6 +143,8 @@ func forwardCommands(cmds chan Command, c *websocket.Conn) {
 }
 
 func main() {
+	scanner := bufio.NewReader(os.Stdin)
+	cmds := parseCmds(scanner)
 	usr := User{Username: "testing", Password: "lol"}
 	err := signup(usr)
 	if err != nil {
@@ -157,8 +159,7 @@ func main() {
 
 	c := connectToSocket(tok)
 	defer c.Close()
-	scanner := bufio.NewReader(os.Stdin)
-	forwardCommands(parseCmds(scanner), c)
+	forwardCommands(cmds, c)
 	os.Exit(1)
 
 }
