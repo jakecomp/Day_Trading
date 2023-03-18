@@ -29,7 +29,7 @@ import { StatusCard, StocksCard, TradesCard } from '../components/home/card'
 import { Header1, Header2, Header3, Header4 } from '../components/atoms/fonts'
 import { BigBlackButton, SmallBlackButton } from '../components/atoms/button'
 import { useState } from 'react'
-import { BuyPopUp } from '../components/popups/homePopup'
+import { BuyPopUp, SellPopUp } from '../components/popups/homePopup'
 import { InputLabel, SignField } from '../components/sign_in/field'
 import { InputContainer } from '../components/sign_in/containers'
 import { CloseContainer } from '../components/popups/containers'
@@ -96,7 +96,7 @@ export const Home = () => {
                                     <Header4>ABC Stocks</Header4>
                                     <AddSellContainer>
                                         <SmallBlackButton onClick={() => setBuyPopup(true)}>Buy</SmallBlackButton>
-                                        <SmallBlackButton>Sell</SmallBlackButton>
+                                        <SmallBlackButton onClick={() => setSellPopup(true)}>Sell</SmallBlackButton>
                                     </AddSellContainer>
                                 </TradesComponentContainer>
                                 <TradesComponentContainer>
@@ -136,7 +136,6 @@ export const Home = () => {
                                     <Header4>ABC Stocks</Header4>
                                     <AddSellContainer>
                                         <SmallBlackButton>Buy</SmallBlackButton>
-                                        <SmallBlackButton>Sell</SmallBlackButton>
                                     </AddSellContainer>
                                 </StocksComponentContainer>
                                 <StocksComponentContainer>
@@ -144,7 +143,6 @@ export const Home = () => {
                                     <Header4>ABC Stocks</Header4>
                                     <AddSellContainer>
                                         <SmallBlackButton>Buy</SmallBlackButton>
-                                        <SmallBlackButton>Sell</SmallBlackButton>
                                     </AddSellContainer>
                                 </StocksComponentContainer>
                                 <StocksComponentContainer>
@@ -152,7 +150,6 @@ export const Home = () => {
                                     <Header4>ABC Stocks</Header4>
                                     <AddSellContainer>
                                         <SmallBlackButton>Buy</SmallBlackButton>
-                                        <SmallBlackButton>Sell</SmallBlackButton>
                                     </AddSellContainer>
                                 </StocksComponentContainer>
                             </StocksContainer>
@@ -175,6 +172,21 @@ export const Home = () => {
                     Buy
                 </BigBlackButton>
             </BuyPopUp>
+            <SellPopUp trigger={sellPopup}>
+                <CloseContainer>
+                    <img src={exit} style={{ width: '40px' }} onClick={() => setSellPopup(false)} />
+                </CloseContainer>
+                <Header3>Stock abc sell</Header3>
+                <InputContainer>
+                    <InputLabel>Sell stocks</InputLabel>
+                    <SignField></SignField>
+                    <InputLabel>Automatic Sell</InputLabel>
+                    <SignField placeholder='Set amount'></SignField>
+                </InputContainer>
+                <BigBlackButton style={{ width: '100px', height: '40px' }} onClick={() => setSellPopup(false)}>
+                    Buy
+                </BigBlackButton>
+            </SellPopUp>
         </div>
     )
 }

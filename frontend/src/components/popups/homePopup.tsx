@@ -14,3 +14,13 @@ export const BuyPopUp = (props: any) => {
         </div>
     ) : null
 }
+
+export const SellPopUp = (props: any) => {
+    return props.trigger ? (
+        <div>
+            <PopupBackground>
+                <LoggedCard>{props.children}</LoggedCard>
+            </PopupBackground>
+        </div>
+    ) : null
+}
