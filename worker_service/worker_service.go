@@ -128,10 +128,7 @@ func getNextCommand(msgs <-chan amqp.Delivery) (*Command, error) {
 		resp := <-msgs
 		var cmd Command
 		err := json.Unmarshal(resp.Body, &cmd)
-		if err != nil {
-			return nil, err
-		}
-		return &cmd, nil
+		return &cmd, err
 	}
 
 }
