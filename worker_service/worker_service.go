@@ -496,11 +496,15 @@ func main() {
 	}
 	nch := make(chan Notification)
 	go commandLogger(nch)
+
+	waitChan := make(chan struct{}, MAX_CONCURRENT_JOBS)
 	for _, n := range notes {
 		val := n
 		c := mb.SubscribeAll(val)
+		waitChan <- struct{}{}
 		go func() {
 			// Logs all incoming commands
+			<-waitChan
 			for {
 				r := <-c
 				nch <- r
@@ -515,7 +519,9 @@ func main() {
 			cmd, err := dispatch(*t)
 			if err == nil {
 				// Execute this new command
+				waitChan <- struct{}{}
 				go Run(cmd, mb)
+				<-waitChan
 				// Sleep is here to avoid blocking the
 				// queue server for too long
 				// time.Sleep(time.Millisecond * 1)
