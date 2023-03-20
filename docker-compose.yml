@@ -12,7 +12,7 @@ services:
     build: ./backend_api
     ports:
       - "8000:8000"
-    depends_on: [rabbitmq, queue_service, mongo_db]
+    depends_on: [rabbitmq, mongo_db]
     networks:
       net-10.9.0.0:
         ipv4_address: 10.9.0.4
@@ -46,7 +46,7 @@ services:
     build: ./worker_service
     ports:
       - "8003:8003"
-    depends_on: [rabbitmq, queue_service, backend]
+    depends_on: [rabbitmq, backend]
     networks:
       net-10.9.0.0:
         ipv4_address: 10.9.0.8
