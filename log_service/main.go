@@ -69,7 +69,6 @@ type debugEvent struct {
 	ServerName   string   `xml:"server" json:"server"`
 	Ticketnumber int      `xml:"transactionNum" json:"ticketnumber"`
 	Command      []string `xml:"command" json:"command"`
-	Username     string   `xml:"username" json:"username"`
 	DebugMessage string   `xml:"debugmessage" json:"debugmessage"`
 }
 
@@ -276,7 +275,7 @@ func debuglog(w http.ResponseWriter, r *http.Request) {
 	recive_log.Timestamp = timestamp()
 	//_ = xml.NewEncoder(*xmlwriter).Encode(recive_log)
 	out, _ := xml.MarshalIndent(recive_log, "", "\t")
-	fmt.Println(string(out))
+	// fmt.Println(string(out))
 	f.WriteString(string(out))
 	f.WriteString("\n")
 }
