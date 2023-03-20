@@ -39,13 +39,15 @@ type account_log struct {
 	Ticketnumber int      `xml:"ticketnumber" json:"ticketnumber"`
 	Action       []string `xml:"action,attr" json:"action"`
 }
+
+// Used for errors and debugging
 type debugEvent struct {
-	Timestamp    int64    `xml:"timestamp"`
-	ServerName   string   `xml:"server" json:"server"`
-	Ticketnumber int64    `xml:"transactionNum" json:"ticketnumber"`
-	Command      []string `xml:"command" json:"command"`
-	Username     string   `xml:"username" json:"username"`
-	DebugMessage string   `xml:"debugmessage" json:"debugmessage"`
+	Timestamp    int64
+	ServerName   string   `json:"server"`
+	Ticketnumber int64    `json:"ticketnumber"`
+	Command      []string `json:"command"`
+	Username     string   `json:"username"`
+	DebugMessage string   `json:"message"`
 }
 type Command struct {
 	Ticket  int
@@ -177,6 +179,19 @@ func sendUserLog(n Notification) {
 	}
 }
 
+func sendErrorLog(ticket int64, msg string) {
+	ulog, _ := json.Marshal(debugEvent{
+		ServerName:   "worker",
+		Ticketnumber: ticket,
+		DebugMessage: msg,
+	})
+	bodyReader := bytes.NewReader(ulog)
+	_, err := http.Post("http://10.9.0.9:8004/errorlog", "application/json", bodyReader)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
 func sendDebugLog(ticket int64, msg string) {
 	ulog, _ := json.Marshal(debugEvent{
 		ServerName:   "worker",
@@ -189,22 +204,6 @@ func sendDebugLog(ticket int64, msg string) {
 		log.Fatal(err)
 	}
 }
-
-// Not currently used
-// func sendSystemLog(n *Notification) {
-// 	s := system_log{
-// 		Username: n.Userid,
-// 		// Funds:        fmt.Sprint(users[userid(n.Userid)].Balance),
-// 		Ticketnumber: int(n.Ticket),
-// 		Command:      []string{n.Topic},
-// 	}
-// 	ulog, _ := json.Marshal(s)
-// 	bodyReader := bytes.NewReader(ulog)
-// 	_, err := http.Post("http://10.9.0.9:8004/systemlog", "application/json", bodyReader)
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
-// }
 
 // Logs incomming commands
 func commandLogger(nch <-chan Notification) {
@@ -228,14 +227,14 @@ func addMoney(newMoney Notification, db *mongo.Client, ctx *context.Context) err
 		current_user_doc, err = read_db(string(uid), true, db, ctx)
 	}
 
-	sendDebugLog(int64(newMoney.Ticket), fmt.Sprint("user doc before adding money", current_user_doc, "for notification", newMoney))
+	sendDebugLog(int64(newMoney.Ticket), fmt.Sprint("user doc before adding money\n", current_user_doc, "for notification\n", newMoney))
 
 	current_user_doc.Balance += float32(*newMoney.Amount)
 
 	newMoney.Topic = "add"
 	sendAccountLog(&newMoney, current_user_doc.Balance)
 
-	sendDebugLog(int64(newMoney.Ticket), fmt.Sprint("user doc after adding money", current_user_doc, "for notification", newMoney))
+	sendDebugLog(int64(newMoney.Ticket), fmt.Sprint("user doc after adding money\n", current_user_doc, "for notification\n", newMoney))
 
 	update_db(current_user_doc, db, *ctx)
 	return err
@@ -258,15 +257,15 @@ func sellStock(price float64, newMoney Notification, db *mongo.Client, ctx *cont
 		return errors.New(fmt.Sprint("ERROR: less than 0 stock available", *newMoney.Stock, *newMoney.Stock, " for price ", price))
 	}
 
-	sendDebugLog(int64(newMoney.Ticket), fmt.Sprint("user doc before sale money", current_user_doc, "for notification", newMoney))
+	sendDebugLog(int64(newMoney.Ticket), fmt.Sprint("user doc before sale money\n", current_user_doc, "for notification\n", newMoney))
 
 	current_user_doc.Balance += float32(*newMoney.Amount)
-	current_user_doc.Stonks[*newMoney.Stock] -= int(*newMoney.Amount / price)
+	current_user_doc.Stonks[*newMoney.Stock] -= *newMoney.Amount / price
 
 	newMoney.Topic = "add"
 	sendAccountLog(&newMoney, current_user_doc.Balance)
 
-	sendDebugLog(int64(newMoney.Ticket), fmt.Sprint("user doc after sale money", current_user_doc, "for notification", newMoney))
+	sendDebugLog(int64(newMoney.Ticket), fmt.Sprint("user doc after sale money\n", current_user_doc, "for notification\n", newMoney))
 
 	update_db(current_user_doc, db, *ctx)
 	return nil
@@ -284,22 +283,21 @@ func buyStock(price float64, newMoney Notification, db *mongo.Client, ctx *conte
 	if err != nil {
 		return err
 	}
+	sendDebugLog(int64(newMoney.Ticket), fmt.Sprint("user doc before purchase money\n", current_user_doc, "for notification\n", newMoney, " with buy amount ", *newMoney.Amount, " of stock ", *newMoney.Stock, "\nWith a value of:", price))
 
 	current_user_doc.Balance -= float32(*newMoney.Amount)
 	if current_user_doc.Balance < 0 {
 		return errors.New(fmt.Sprint("Negative balance is not allowed during buy for ", *newMoney.Stock, " for price ", price))
 	}
 
-	sendDebugLog(int64(newMoney.Ticket), fmt.Sprint("user doc before purchase money", current_user_doc, "for notification", newMoney))
-
 	_, ok := current_user_doc.Stonks[*newMoney.Stock]
 	if !ok {
-		current_user_doc.Stonks[*newMoney.Stock] = int(*newMoney.Amount / price)
+		current_user_doc.Stonks[*newMoney.Stock] = *newMoney.Amount / price
 	} else {
-		current_user_doc.Stonks[*newMoney.Stock] += int(*newMoney.Amount / price)
+		current_user_doc.Stonks[*newMoney.Stock] += *newMoney.Amount / price
 	}
 
-	sendDebugLog(int64(newMoney.Ticket), fmt.Sprint("user doc after purchase money", current_user_doc, "for notification", newMoney))
+	sendDebugLog(int64(newMoney.Ticket), fmt.Sprint("user doc after purchase money\n", current_user_doc, "for notification\n", newMoney, " with buy amount ", *newMoney.Amount, " of stock ", *newMoney.Stock, "\nWith a value of:", price))
 
 	newMoney.Topic = "remove"
 	sendAccountLog(&newMoney, current_user_doc.Balance)
@@ -349,7 +347,7 @@ func UserAccountManager(mb *MessageBus) {
 			last_ticket = int(purchase.Ticket)
 		}
 		if err != nil {
-			sendDebugLog(int64(last_ticket), fmt.Sprint("ERROR:", err))
+			sendErrorLog(int64(last_ticket), fmt.Sprint("ERROR:", err))
 		}
 	}
 }
@@ -536,7 +534,7 @@ func main() {
 				// queue server for too long
 				// time.Sleep(time.Millisecond * 1)
 			} else {
-				sendDebugLog(int64(t.Ticket), fmt.Sprint("ERROR:", err))
+				sendErrorLog(int64(t.Ticket), fmt.Sprint("ERROR:", err))
 			}
 		}
 

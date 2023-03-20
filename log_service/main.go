@@ -62,6 +62,7 @@ type errorEvent struct {
 	Ticketnumber int      `xml:"transactionNum" json:"ticketnumber"`
 	Command      []string `xml:"command" json:"command"`
 	Username     string   `xml:"username" json:"username"`
+	DebugMessage string   `xml:"errorMessage" json:"message"`
 }
 
 type debugEvent struct {
@@ -69,7 +70,7 @@ type debugEvent struct {
 	ServerName   string   `xml:"server" json:"server"`
 	Ticketnumber int      `xml:"transactionNum" json:"ticketnumber"`
 	Command      []string `xml:"command" json:"command"`
-	DebugMessage string   `xml:"debugmessage" json:"debugmessage"`
+	DebugMessage string   `xml:"debugMessage" json:"message"`
 }
 
 type dumplogEvent struct {

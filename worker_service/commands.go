@@ -41,7 +41,7 @@ type user_doc struct {
 	Username string
 	Hash     string
 	Balance  float32
-	Stonks   map[string]int
+	Stonks   map[string]float64
 }
 
 type quote struct {
@@ -117,7 +117,7 @@ func read_db(username string, add_command bool, db *mongo.Client, ctx context.Co
 			new_doc.Username = username
 			new_doc.Hash = "unsecure_this_user_never_made_account_via_backend"
 			new_doc.Balance = 0
-			new_doc.Stonks = make(map[string]int)
+			new_doc.Stonks = make(map[string]float64)
 
 			collection := db.Database(database).Collection("users")
 			_, err = collection.InsertOne(context.TODO(), new_doc)
