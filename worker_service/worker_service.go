@@ -248,14 +248,14 @@ func addMoney(newMoney Notification, db *mongo.Client, ctx *context.Context) err
 		current_user_doc, err = read_db(string(uid), true, db, ctx)
 	}
 
-	sendDebugLog(int64(newMoney.Ticket), fmt.Sprint("user doc before adding money", current_user_doc))
+	sendDebugLog(int64(newMoney.Ticket), fmt.Sprint("user doc before adding money", current_user_doc, "for notification", newMoney))
 
 	current_user_doc.Balance += float32(*newMoney.Amount)
 
 	newMoney.Topic = "add"
 	sendAccountLog(&newMoney, current_user_doc.Balance)
 
-	sendDebugLog(int64(newMoney.Ticket), fmt.Sprint("user doc after adding money", current_user_doc))
+	sendDebugLog(int64(newMoney.Ticket), fmt.Sprint("user doc after adding money", current_user_doc, "for notification", newMoney))
 
 	update_db(current_user_doc, db, *ctx)
 	return err
@@ -279,7 +279,7 @@ func sellStock(price float64, newMoney Notification, db *mongo.Client, ctx *cont
 		return errors.New(fmt.Sprint("ERROR: less than 0 stock available", *newMoney.Stock, *newMoney.Stock, " for price ", price))
 	}
 
-	sendDebugLog(int64(newMoney.Ticket), fmt.Sprint("user doc before sale money", current_user_doc))
+	sendDebugLog(int64(newMoney.Ticket), fmt.Sprint("user doc before sale money", current_user_doc, "for notification", newMoney))
 
 	current_user_doc.Balance += float32(*newMoney.Amount)
 	current_user_doc.Stonks[*newMoney.Stock] -= int(*newMoney.Amount / price)
@@ -287,7 +287,7 @@ func sellStock(price float64, newMoney Notification, db *mongo.Client, ctx *cont
 	newMoney.Topic = "add"
 	sendAccountLog(&newMoney, current_user_doc.Balance)
 
-	sendDebugLog(int64(newMoney.Ticket), fmt.Sprint("user doc after sale money", current_user_doc))
+	sendDebugLog(int64(newMoney.Ticket), fmt.Sprint("user doc after sale money", current_user_doc, "for notification", newMoney))
 
 	update_db(current_user_doc, db, *ctx)
 	return nil
@@ -311,7 +311,7 @@ func buyStock(price float64, newMoney Notification, db *mongo.Client, ctx *conte
 		return errors.New(fmt.Sprint("Negative balance is not allowed during buy for ", *newMoney.Stock, " for price ", price))
 	}
 
-	sendDebugLog(int64(newMoney.Ticket), fmt.Sprint("user doc before purchase money", current_user_doc))
+	sendDebugLog(int64(newMoney.Ticket), fmt.Sprint("user doc before purchase money", current_user_doc, "for notification", newMoney))
 
 	_, ok := current_user_doc.Stonks[*newMoney.Stock]
 	if !ok {
@@ -320,7 +320,7 @@ func buyStock(price float64, newMoney Notification, db *mongo.Client, ctx *conte
 		current_user_doc.Stonks[*newMoney.Stock] += int(*newMoney.Amount / price)
 	}
 
-	sendDebugLog(int64(newMoney.Ticket), fmt.Sprint("user doc after purchase money", current_user_doc))
+	sendDebugLog(int64(newMoney.Ticket), fmt.Sprint("user doc after purchase money", current_user_doc, "for notification", newMoney))
 
 	newMoney.Topic = "remove"
 	sendAccountLog(&newMoney, current_user_doc.Balance)
