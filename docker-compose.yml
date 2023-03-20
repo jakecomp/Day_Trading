@@ -42,14 +42,6 @@ services:
       net-10.9.0.0:
         ipv4_address: 10.9.0.11
 
-  queue_service:
-    build: ./queue_service
-    ports:
-      - "8001:8001"
-    networks:
-      net-10.9.0.0:
-        ipv4_address: 10.9.0.7
-
   worker:
     build: ./worker_service
     ports:
