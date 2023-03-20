@@ -17,6 +17,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
+const DEBUG = true
+
 type userid string
 type Args []string
 type user_log struct {
@@ -193,15 +195,18 @@ func sendErrorLog(ticket int64, msg string) {
 }
 
 func sendDebugLog(ticket int64, msg string) {
-	ulog, _ := json.Marshal(debugEvent{
-		ServerName:   "worker",
-		Ticketnumber: ticket,
-		DebugMessage: msg,
-	})
-	bodyReader := bytes.NewReader(ulog)
-	_, err := http.Post("http://10.9.0.9:8004/debuglog", "application/json", bodyReader)
-	if err != nil {
-		log.Fatal(err)
+	if DEBUG {
+		ulog, _ := json.Marshal(debugEvent{
+			ServerName:   "worker",
+			Ticketnumber: ticket,
+			DebugMessage: msg,
+		})
+		bodyReader := bytes.NewReader(ulog)
+		_, err := http.Post("http://10.9.0.9:8004/debuglog", "application/json", bodyReader)
+		if err != nil {
+			log.Fatal(err)
+		}
+
 	}
 }
 
