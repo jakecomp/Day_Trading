@@ -13,6 +13,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/gorilla/websocket"
+	"github.com/streadway/amqp"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -20,7 +21,9 @@ import (
 )
 
 var db *mongo.Client
-var queueServiceConn *websocket.Conn
+var ctx context.Context
+var queueServiceConn *amqp.Channel
+var queue amqp.Queue
 var upgrader = websocket.Upgrader{}
 
 const database = "day_trading"
@@ -73,8 +76,6 @@ func Signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db, ctx := connect()
-
 	// Parse and decode the request body into a new `Credentials` instance
 	creds := &Credentials{}
 	err := json.NewDecoder(r.Body).Decode(creds)
@@ -99,9 +100,9 @@ func Signup(w http.ResponseWriter, r *http.Request) {
 	// Save User Doc to MongoDB
 	collection := db.Database(database).Collection("users")
 	result, err := collection.InsertOne(context.TODO(), doc)
-	db.Disconnect(ctx)
 	if err != nil {
 		fmt.Println("Error Inserting to DB: ", err)
+		db.Disconnect(ctx)
 		return
 	}
 
@@ -116,7 +117,6 @@ func Signin(w http.ResponseWriter, r *http.Request) {
 	if (*r).Method == "OPTIONS" {
 		return
 	}
-	db, ctx := connect()
 
 	// Parse and decode the request body into a new `Credentials` instance
 	creds := &Credentials{}
@@ -242,9 +242,20 @@ func socketReader(conn *websocket.Conn) {
 				fmt.Println("Error: Failed to get quote. ", err)
 			}
 		} else {
-			messageToQueue := &Message{"ENQUEUE", cmd}
-			msg, _ := json.Marshal(*messageToQueue)
-			queueServiceConn.WriteMessage(messageType, msg)
+			msg, _ := json.Marshal(*cmd)
+			err = queueServiceConn.Publish(
+				"",         // Exchange name
+				queue.Name, // Queue name
+				false,      // Mandatory
+				false,      // Immediate
+				amqp.Publishing{
+					ContentType: "text/json",
+					Body:        []byte(msg),
+				},
+			)
+			log.Printf(" [x] Sent %s", msg)
+			failOnError(err, "Failed to publish a message")
+
 		}
 
 		if err != nil {
@@ -274,10 +285,34 @@ func handleRequests() {
 	http.HandleFunc("/ws", socketHandler)
 	log.Fatal(http.ListenAndServe(":8000", nil))
 }
+func dial(url string) (*amqp.Connection, error) {
+	for {
+		conn, err := amqp.Dial("amqp://guest:guest@10.9.0.10:5672/")
+		if err == nil {
+			return conn, err
+		}
+		// Rabbitmq is slow to start so we might have to wait on it
+		time.Sleep(time.Second * 3)
+	}
+
+}
 
 func main() {
-	queueServiceConn = connectQueue()
-	fmt.Println("RUNNING ON PORT 8000...")
+	db, ctx = connect()
+	defer db.Disconnect(ctx)
+
+	log.SetOutput(ioutil.Discard)
+
+	// Connect to RabbitMQ server
+	time.Sleep(time.Second * 15)
+	conn, err := dial("amqp://guest:guest@10.9.0.10:5672/")
+	failOnError(err, "Failed to connect to RabbitMQ")
+	defer conn.Close()
+
+	queue, queueServiceConn = connectQueue(conn)
+	defer queueServiceConn.Close()
+	fmt.Print("queue created")
+	log.Println("RUNNING ON PORT 8000...")
 	handleRequests()
 }
 
@@ -285,7 +320,7 @@ func connect() (*mongo.Client, context.Context) {
 	clientOptions := options.Client()
 	clientOptions.ApplyURI("mongodb://admin:admin@10.9.0.3:27017")
 	// clientOptions.ApplyURI("mongodb://admin:admin@localhost:27017")
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Hour)
 	client, err := mongo.Connect(ctx, clientOptions)
 
 	if err != nil {
@@ -295,10 +330,23 @@ func connect() (*mongo.Client, context.Context) {
 	return client, ctx
 }
 
-func connectQueue() *websocket.Conn {
-	conn, _, _ := websocket.DefaultDialer.Dial("ws://10.9.0.7:8001/ws?", nil)
-	// conn, _, _ := websocket.DefaultDialer.Dial("ws://localhost:8001/ws?", nil)
-	return conn
+func connectQueue(conn *amqp.Connection) (amqp.Queue, *amqp.Channel) {
+
+	// Create a channel
+	ch, err := conn.Channel()
+	failOnError(err, "Failed to open a channel")
+
+	// Declare a queue
+	q, err := ch.QueueDeclare(
+		"worker", // Queue name
+		false,    // Durable
+		false,    // Delete when unused
+		false,    // Exclusive
+		false,    // No-wait
+		nil,      // Arguments
+	)
+	failOnError(err, "Failed to declare a queue")
+	return q, ch
 }
 
 func hashPassword(password string) string {
@@ -359,4 +407,10 @@ func validateToken(w http.ResponseWriter, r *http.Request) (err error) {
 	}
 
 	return nil
+}
+
+func failOnError(err error, msg string) {
+	if err != nil {
+		log.Fatalf("%s: %s", msg, err)
+	}
 }

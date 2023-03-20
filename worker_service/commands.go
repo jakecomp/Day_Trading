@@ -27,7 +27,7 @@ func connect() (*mongo.Client, context.Context) {
 	clientOptions := options.Client()
 	clientOptions.ApplyURI("mongodb://admin:admin@10.9.0.3:27017")
 	// clientOptions.ApplyURI("mongodb://admin:admin@localhost:27017")
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 1*time.Hour)
 	client, err := mongo.Connect(ctx, clientOptions)
 
 	if err != nil {
@@ -65,15 +65,15 @@ type CMD interface {
 	Postrequsite(*MessageBus) error
 }
 
-func Run(c CMD, m *MessageBus, tchan chan *Transaction) {
-	log.Println("Executing prereq for ", reflect.TypeOf(c), c)
+func Run(c CMD, m *MessageBus) {
+	// log.Println("Executing prereq for ", reflect.TypeOf(c), c)
 	err := c.Prerequsite(m)
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println("Executed prereq for ", reflect.TypeOf(c), c)
-	log.Println("Executing ", reflect.TypeOf(c), c)
-	err = c.Execute(tchan)
+	// log.Println("Executed prereq for ", reflect.TypeOf(c), c)
+	// log.Println("Executing ", reflect.TypeOf(c), c)
+	// err = c.Execute(tchan)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -83,13 +83,13 @@ func Run(c CMD, m *MessageBus, tchan chan *Transaction) {
 		n := c.Notify()
 		m.Publish(n.Topic, n)
 	}()
-	log.Println("Notification sent for ", reflect.TypeOf(c), c)
-	log.Println("Executing Postreq for ", reflect.TypeOf(c), c)
+	// log.Println("Notification sent for ", reflect.TypeOf(c), c)
+	// log.Println("Executing Postreq for ", reflect.TypeOf(c), c)
 	err = c.Postrequsite(m)
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println("Executed Postreq for ", reflect.TypeOf(c), c)
+	// log.Println("Executed Postreq for ", reflect.TypeOf(c), c)
 }
 
 const (
@@ -109,9 +109,7 @@ const (
 	notifySTOCK_PRICE        = "STOCK_PRICE"
 )
 
-func read_db(username string, add_command bool) (user_collection *user_doc) {
-
-	db, ctx := connect()
+func read_db(username string, add_command bool, db *mongo.Client, ctx context.Context) (user_collection *user_doc) {
 
 	var err error
 	var result user_doc
@@ -131,11 +129,11 @@ func read_db(username string, add_command bool) (user_collection *user_doc) {
 			_, err = collection.InsertOne(context.TODO(), new_doc)
 
 			if err != nil {
-				fmt.Println("Error inserting into db: ", err)
+				fmt.Println("Error adding user to db: ", err)
 				panic(err)
 			}
 
-			db.Disconnect(ctx)
+			//defer db.Disconnect(ctx)
 			return new_doc
 
 		} else {
@@ -145,14 +143,10 @@ func read_db(username string, add_command bool) (user_collection *user_doc) {
 		}
 
 	}
-
-	db.Disconnect(ctx)
 	return &result
 }
 
-func update_db(new_doc *user_doc) {
-
-	db, ctx := connect()
+func update_db(new_doc *user_doc, db *mongo.Client, ctx context.Context) {
 
 	var err error
 
@@ -161,7 +155,6 @@ func update_db(new_doc *user_doc) {
 	selected_user := bson.M{"username": new_doc.Username}
 	updated_user := bson.M{"$set": bson.M{"balance": new_doc.Balance, "stonks": new_doc.Stonks}}
 	_, err = collection.UpdateOne(context.TODO(), selected_user, updated_user)
-	db.Disconnect(ctx)
 
 	if err != nil {
 		fmt.Println("Error inserting into db: ", err)
