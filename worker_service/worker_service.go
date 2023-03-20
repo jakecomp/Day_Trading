@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gorilla/websocket"
 	"github.com/streadway/amqp"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -120,22 +119,6 @@ func dispatch(cmd Command) (CMD, error) {
 		return nil, errors.New("Undefinined command" + cmd.Command)
 	}
 	return funcLookup[cmd.Command](cmd)
-}
-
-// Enqueue a new command to the queue server
-// not used in this current implementation
-func pushCommand(conn *websocket.Conn, t *Command) error {
-	// Event Loop, Handle Comms in here
-	fmt.Println("transaction: ", *t)
-
-	message := &Message{"ENQUEUE", t}
-	msg, _ := json.Marshal(*message)
-
-	err := conn.WriteMessage(websocket.TextMessage, msg)
-	if err != nil {
-		return err
-	}
-	return err
 }
 
 // TODO avoid this blocking for to avoid unnecssecary blocking on main thread
@@ -262,7 +245,6 @@ func addMoney(newMoney Notification, db *mongo.Client, ctx *context.Context) err
 }
 func sellStock(price float64, newMoney Notification, db *mongo.Client, ctx *context.Context) error {
 	uid := userid(newMoney.Userid)
-	fmt.Println("selling")
 
 	current_user_doc, err := read_db(string(uid), false, db, *ctx)
 
