@@ -73,7 +73,6 @@ func homePage(w http.ResponseWriter, r *http.Request) {
 }
 
 func Signup(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Endpoint Hit: signup")
 	setupCORS(w, r)
 	if (*r).Method == "OPTIONS" {
 		return
@@ -112,13 +111,10 @@ func Signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Fprintf(w, "SIGNED YOU UP!")
-	fmt.Println("signup user " + doc.Username + " with hash " + doc.Hash)
 	print(result)
 }
 
 func Signin(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Endpoint Hit: signin")
 	setupCORS(w, r)
 	if (*r).Method == "OPTIONS" {
 		return
@@ -168,14 +164,11 @@ func Signin(w http.ResponseWriter, r *http.Request) {
 
 func socketHandler(w http.ResponseWriter, r *http.Request) {
 	// Authenticate User
-	fmt.Println("Endpoint Hit: WS")
 	var valid = validateToken(w, r)
 	if valid != nil {
 		fmt.Println("Token not valid! Error: ", valid)
 		return
 	}
-
-	fmt.Println("Token Valid! Connecting Websocket...")
 
 	// Upgrade our raw HTTP connection to a websocket based one
 	upgrader.CheckOrigin = func(r *http.Request) bool { return true }
@@ -185,7 +178,6 @@ func socketHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.Close()
-	//err = conn.WriteMessage(1, []byte("Hello there"))
 	socketReader(conn)
 }
 
