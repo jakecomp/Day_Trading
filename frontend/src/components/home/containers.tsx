@@ -14,6 +14,10 @@ export const UserTextContainer = styled.div`
     flex-direction: row;
     align-items: center;
     justify-content: center;
+    gap: 32px;
+`
+
+export const AccountContainer = styled(UserTextContainer)`
     gap: 8px;
 `
 
@@ -91,5 +95,11 @@ export const StocksContainer = styled(TradesContainer)`
     gap: 8px;
 `
 export const StocksComponentContainer = styled(TradesComponentContainer)`
-    width: 358px;
+    width: 300px;
+`
+
+export const InputPopupContainer = styled.div`
+    display: flex;
+    flex-direction: row;
+    gap: 16px;
 `

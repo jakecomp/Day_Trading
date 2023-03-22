@@ -24,19 +24,52 @@ import {
     StocksCardContainer,
     StocksContainer,
     StocksComponentContainer,
+    InputPopupContainer,
+    AccountContainer,
 } from '../components/home/containers'
 import { StatusCard, StocksCard, TradesCard } from '../components/home/card'
 import { Header1, Header2, Header3, Header4 } from '../components/atoms/fonts'
-import { BigBlackButton, SmallBlackButton } from '../components/atoms/button'
+import { BigBlackButton, MediumBlackButton, SmallBlackButton } from '../components/atoms/button'
 import { useState } from 'react'
-import { BuyPopUp, SellPopUp } from '../components/popups/homePopup'
-import { InputLabel, SignField } from '../components/sign_in/field'
-import { InputContainer } from '../components/sign_in/containers'
+import { BuyPopUp, HistoryPopUp, SellPopUp } from '../components/popups/homePopup'
+import { FieldForm, InputLabel, SignField } from '../components/sign_in/field'
+import { InputComponentContainer, InputContainer } from '../components/sign_in/containers'
 import { CloseContainer } from '../components/popups/containers'
+import { useForm } from 'react-hook-form'
 
 export const Home = () => {
     const [buyPopup, setBuyPopup] = useState(false)
     const [sellPopup, setSellPopup] = useState(false)
+    const [historyPopup, setHistoryPopup] = useState(false)
+
+    interface valueForm {
+        buy: number
+        autobuy: number
+        sell: number
+        autoSell: number
+    }
+
+    const { register, handleSubmit } = useForm<valueForm>({ mode: 'onSubmit' })
+
+    const RetrieveBuyData = (data: valueForm) => {
+        console.log('Buy')
+        console.log(data)
+    }
+
+    const RetrieveAutoBuyData = (data: valueForm) => {
+        console.log('AutoBuy')
+        console.log(data)
+    }
+
+    const RetrieveSellData = (data: valueForm) => {
+        console.log('Sell')
+        console.log(data)
+    }
+
+    const RetrieveAutoSellData = (data: valueForm) => {
+        console.log('AutoSell')
+        console.log(data)
+    }
 
     return (
         <div>
@@ -48,8 +81,11 @@ export const Home = () => {
                     </UserTextContainer>
                     <UserContainer>
                         <UserTextContainer>
-                            <Header2>John Smither</Header2>
-                            <img src={user} />
+                            <MediumBlackButton onClick={() => setHistoryPopup(true)}>History</MediumBlackButton>
+                            <AccountContainer>
+                                <Header2>John Smither</Header2>
+                                <img src={user} />
+                            </AccountContainer>
                         </UserTextContainer>
                     </UserContainer>
                 </NavbarBackground>
@@ -92,35 +128,10 @@ export const Home = () => {
                             <Header3>My Trades</Header3>
                             <TradesContainer>
                                 <TradesComponentContainer>
-                                    <Header4>$$</Header4>
                                     <Header4>ABC Stocks</Header4>
                                     <AddSellContainer>
                                         <SmallBlackButton onClick={() => setBuyPopup(true)}>Buy</SmallBlackButton>
                                         <SmallBlackButton onClick={() => setSellPopup(true)}>Sell</SmallBlackButton>
-                                    </AddSellContainer>
-                                </TradesComponentContainer>
-                                <TradesComponentContainer>
-                                    <Header4>$$</Header4>
-                                    <Header4>ABC Stocks</Header4>
-                                    <AddSellContainer>
-                                        <SmallBlackButton>Buy</SmallBlackButton>
-                                        <SmallBlackButton>Sell</SmallBlackButton>
-                                    </AddSellContainer>
-                                </TradesComponentContainer>
-                                <TradesComponentContainer>
-                                    <Header4>$$</Header4>
-                                    <Header4>ABC Stocks</Header4>
-                                    <AddSellContainer>
-                                        <SmallBlackButton>Buy</SmallBlackButton>
-                                        <SmallBlackButton>Sell</SmallBlackButton>
-                                    </AddSellContainer>
-                                </TradesComponentContainer>
-                                <TradesComponentContainer>
-                                    <Header4>$$</Header4>
-                                    <Header4>ABC Stocks</Header4>
-                                    <AddSellContainer>
-                                        <SmallBlackButton>Buy</SmallBlackButton>
-                                        <SmallBlackButton>Sell</SmallBlackButton>
                                     </AddSellContainer>
                                 </TradesComponentContainer>
                             </TradesContainer>
@@ -132,24 +143,9 @@ export const Home = () => {
                             <Header3>Available Stocks</Header3>
                             <StocksContainer>
                                 <StocksComponentContainer>
-                                    <Header4>$$</Header4>
                                     <Header4>ABC Stocks</Header4>
                                     <AddSellContainer>
-                                        <SmallBlackButton>Buy</SmallBlackButton>
-                                    </AddSellContainer>
-                                </StocksComponentContainer>
-                                <StocksComponentContainer>
-                                    <Header4>$$</Header4>
-                                    <Header4>ABC Stocks</Header4>
-                                    <AddSellContainer>
-                                        <SmallBlackButton>Buy</SmallBlackButton>
-                                    </AddSellContainer>
-                                </StocksComponentContainer>
-                                <StocksComponentContainer>
-                                    <Header4>$$</Header4>
-                                    <Header4>ABC Stocks</Header4>
-                                    <AddSellContainer>
-                                        <SmallBlackButton>Buy</SmallBlackButton>
+                                        <SmallBlackButton onClick={() => setBuyPopup(true)}>Buy</SmallBlackButton>
                                     </AddSellContainer>
                                 </StocksComponentContainer>
                             </StocksContainer>
@@ -157,36 +153,80 @@ export const Home = () => {
                     </StocksCard>
                 </BottomContainer>
             </HomeBackground>
+
             <BuyPopUp trigger={buyPopup}>
                 <CloseContainer>
                     <img src={exit} style={{ width: '40px' }} onClick={() => setBuyPopup(false)} />
                 </CloseContainer>
                 <Header3>Stock abc buy</Header3>
                 <InputContainer>
-                    <InputLabel>Buy more</InputLabel>
-                    <SignField></SignField>
-                    <InputLabel>Automatic Buy</InputLabel>
-                    <SignField placeholder='Set amount'></SignField>
+                    <InputComponentContainer onSubmit={handleSubmit(RetrieveBuyData)}>
+                        <InputLabel>Buy more</InputLabel>
+                        <InputPopupContainer>
+                            <SignField {...register('buy')}></SignField>
+                            <BigBlackButton
+                                style={{ width: '100px', height: '40px' }}
+                                // onClick={() => setBuyPopup(false)}
+                            >
+                                Buy
+                            </BigBlackButton>
+                        </InputPopupContainer>
+                    </InputComponentContainer>
+
+                    <InputComponentContainer onSubmit={handleSubmit(RetrieveAutoBuyData)}>
+                        <InputLabel>Automatic Buy</InputLabel>
+                        <InputPopupContainer>
+                            <SignField placeholder='Set amount' {...register('autobuy')}></SignField>
+                            <BigBlackButton
+                                style={{ width: '100px', height: '40px' }}
+                                // onClick={() => setBuyPopup(false)}
+                            >
+                                Buy
+                            </BigBlackButton>
+                        </InputPopupContainer>
+                    </InputComponentContainer>
                 </InputContainer>
-                <BigBlackButton style={{ width: '100px', height: '40px' }} onClick={() => setBuyPopup(false)}>
-                    Buy
-                </BigBlackButton>
             </BuyPopUp>
+
             <SellPopUp trigger={sellPopup}>
                 <CloseContainer>
                     <img src={exit} style={{ width: '40px' }} onClick={() => setSellPopup(false)} />
                 </CloseContainer>
                 <Header3>Stock abc sell</Header3>
                 <InputContainer>
-                    <InputLabel>Sell stocks</InputLabel>
-                    <SignField></SignField>
-                    <InputLabel>Automatic Sell</InputLabel>
-                    <SignField placeholder='Set amount'></SignField>
+                    <InputComponentContainer onSubmit={handleSubmit(RetrieveSellData)}>
+                        <InputLabel>Sell stocks</InputLabel>
+                        <InputPopupContainer>
+                            <SignField {...register('sell')}></SignField>
+                            <BigBlackButton
+                                style={{ width: '100px', height: '40px' }}
+                                // onClick={() => setSellPopup(false)}
+                            >
+                                Sell
+                            </BigBlackButton>
+                        </InputPopupContainer>
+                    </InputComponentContainer>
+
+                    <InputComponentContainer onSubmit={handleSubmit(RetrieveAutoSellData)}>
+                        <InputLabel>Automatic Sell</InputLabel>
+                        <InputPopupContainer>
+                            <SignField placeholder='Set amount' {...register('autoSell')}></SignField>
+                            <BigBlackButton
+                                style={{ width: '100px', height: '40px' }}
+                                // onClick={() => setSellPopup(false)}
+                            >
+                                Sell
+                            </BigBlackButton>
+                        </InputPopupContainer>
+                    </InputComponentContainer>
                 </InputContainer>
-                <BigBlackButton style={{ width: '100px', height: '40px' }} onClick={() => setSellPopup(false)}>
-                    Buy
-                </BigBlackButton>
             </SellPopUp>
+
+            <HistoryPopUp trigger={historyPopup}>
+                <CloseContainer>
+                    <img src={exit} style={{ width: '40px' }} onClick={() => setHistoryPopup(false)} />
+                </CloseContainer>
+            </HistoryPopUp>
         </div>
     )
 }

@@ -18,10 +18,20 @@ export const BigBlackButton = styled.button`
     }
 `
 
+export const MediumBlackButton = styled(BigBlackButton)`
+    width: 94px;
+    height: 36px;
+    padding: 0px 64px;
+    border-radius: 16px;
+    font-family: Monsterrat-Medium;
+    font-size: 18px;
+    color: #ffffff;
+`
+
 export const SmallBlackButton = styled(BigBlackButton)`
     width: 72px;
     height: 20px;
-    padding: 0px 16px;
+    padding: 12px 16px;
     font-family: Monsterrat-Medium;
     font-size: 16px;
     color: #ffffff;

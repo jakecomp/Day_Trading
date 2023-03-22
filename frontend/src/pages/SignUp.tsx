@@ -9,7 +9,9 @@ import { useForm } from 'react-hook-form'
 import { SimpleLink } from '../components/atoms/links'
 import { SignInPopUp } from '../components/popups/signinpopup'
 import { Header3 } from '../components/atoms/fonts'
-import { useEffect, useRef, useState } from 'react'
+import { Component, useEffect, useRef, useState } from 'react'
+
+
 
 export const SignUp = () => {
 
@@ -46,8 +48,9 @@ export const SignUp = () => {
                 .then((response) => response.text())
                 .then((response) => {
                     socket = new WebSocket('ws://10.9.0.4:8000/ws?token=' + response)
-                    socket.onopen = function () {
+                    socket.onopen = () => {
                         socket.send('Hi Hi Server')
+                        console.log('Websocket Client Connected')
                         socket.onmessage = (msg: any) => {
                             console.log('Server Message: ' + msg.data)
                         }
