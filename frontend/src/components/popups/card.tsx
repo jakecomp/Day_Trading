@@ -4,7 +4,7 @@ export const LoggedCard = styled.div`
     width: 280px;
     height: 330px;
     background-color: #ffffff;
-    padding: 64px;
+    padding: 20px 64px 84px;
     margin-top: 64px;
     margin-bottom: 64px;
     box-shadow: 0 8px 24px 0 rgba(0, 0, 0, 0.05);

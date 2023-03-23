@@ -37,7 +37,18 @@ import { InputComponentContainer, InputContainer } from '../components/sign_in/c
 import { CloseContainer } from '../components/popups/containers'
 import { useForm } from 'react-hook-form'
 
-export const Home = () => {
+export default function GetStocks(props: any) {
+    const data = props.data
+    const length = data.length
+
+    // const showList = data.map((item: any, index: any) => (
+    //     <TradesComponentContainer key={index} value={item}>
+    //         {item}
+    //     </TradesComponentContainer>
+    // ))
+}
+
+export const Home = (props: any) => {
     const [buyPopup, setBuyPopup] = useState(false)
     const [sellPopup, setSellPopup] = useState(false)
     const [historyPopup, setHistoryPopup] = useState(false)
@@ -70,6 +81,20 @@ export const Home = () => {
         console.log('AutoSell')
         console.log(data)
     }
+
+    const data = ['Adidas', 'Roots', 'RBC', 'Nike']
+
+    const listNumbers = data.map((numbers: any, index: any) => (
+        <TradesComponentContainer key={numbers}>
+            <Header4>
+                {index + 1}.&nbsp;{data[index]}
+            </Header4>
+            <AddSellContainer>
+                <SmallBlackButton onClick={() => setBuyPopup(true)}>Buy</SmallBlackButton>
+                <SmallBlackButton onClick={() => setSellPopup(true)}>Sell</SmallBlackButton>
+            </AddSellContainer>
+        </TradesComponentContainer>
+    ))
 
     return (
         <div>
@@ -126,15 +151,7 @@ export const Home = () => {
                     <TradesCard>
                         <TradesCardContainer>
                             <Header3>My Trades</Header3>
-                            <TradesContainer>
-                                <TradesComponentContainer>
-                                    <Header4>ABC Stocks</Header4>
-                                    <AddSellContainer>
-                                        <SmallBlackButton onClick={() => setBuyPopup(true)}>Buy</SmallBlackButton>
-                                        <SmallBlackButton onClick={() => setSellPopup(true)}>Sell</SmallBlackButton>
-                                    </AddSellContainer>
-                                </TradesComponentContainer>
-                            </TradesContainer>
+                            <TradesContainer>{listNumbers}</TradesContainer>
                             <img src={stats} width='571' height='258' />
                         </TradesCardContainer>
                     </TradesCard>

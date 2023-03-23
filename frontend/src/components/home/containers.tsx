@@ -67,12 +67,12 @@ export const TradesCardContainer = styled.div`
     justify-content: flex-start;
     align-items: center;
 `
-export const TradesContainer = styled.div`
+export const TradesContainer = styled.ul`
     display: flex;
     flex-direction: column;
     gap: 8px;
 `
-export const TradesComponentContainer = styled.div`
+export const TradesComponentContainer = styled.li`
     width: 418px;
     display: flex;
     justify-content: space-between;
