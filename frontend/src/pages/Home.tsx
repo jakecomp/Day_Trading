@@ -37,21 +37,12 @@ import { InputComponentContainer, InputContainer } from '../components/sign_in/c
 import { CloseContainer } from '../components/popups/containers'
 import { useForm } from 'react-hook-form'
 
-export default function GetStocks(props: any) {
-    const data = props.data
-    const length = data.length
-
-    // const showList = data.map((item: any, index: any) => (
-    //     <TradesComponentContainer key={index} value={item}>
-    //         {item}
-    //     </TradesComponentContainer>
-    // ))
-}
-
 export const Home = (props: any) => {
     const [buyPopup, setBuyPopup] = useState(false)
     const [sellPopup, setSellPopup] = useState(false)
     const [historyPopup, setHistoryPopup] = useState(false)
+    const [stockId, setStockId] = useState(0)
+    const [stockList, setStockList] = useState('')
 
     interface valueForm {
         buy: number
@@ -61,6 +52,18 @@ export const Home = (props: any) => {
     }
 
     const { register, handleSubmit } = useForm<valueForm>({ mode: 'onSubmit' })
+
+    const handleBuy = (index: number, list: any) => {
+        setBuyPopup(true)
+        setStockId(index)
+        setStockList(list)
+    }
+
+    const handleSell = (index: number, list: any) => {
+        setSellPopup(true)
+        setStockId(index)
+        setStockList(list)
+    }
 
     const RetrieveBuyData = (data: valueForm) => {
         console.log('Buy')
@@ -82,16 +85,52 @@ export const Home = (props: any) => {
         console.log(data)
     }
 
-    const data = ['Adidas', 'Roots', 'RBC', 'Nike']
+    // User Data
+    const retrievedName = 'Anita B. Etin'
+    const tradingBalanceValue = '$5,291'
+    const investmentValue = '$7,042'
+    const rateofReturnValue = '148%'
+    const numberOfTradesValue = '87'
 
-    const listNumbers = data.map((numbers: any, index: any) => (
-        <TradesComponentContainer key={numbers}>
+    const availableStocks = [
+        'Lululemon',
+        'Netflix',
+        'Air Canada',
+        'Amazon',
+        'Luke',
+        'Emia',
+        'Banshee',
+        'Bayern',
+        'Mercedes',
+        'Samsung',
+        'Freeport',
+        'Nord',
+    ]
+    const listStocks = availableStocks.length >= 10 ? '388px' : 'unset'
+
+    const stocksList = availableStocks.map((value: any, index: any) => (
+        <StocksComponentContainer key={value}>
             <Header4>
-                {index + 1}.&nbsp;{data[index]}
+                {index + 1}.&nbsp;{availableStocks[index]}
             </Header4>
             <AddSellContainer>
-                <SmallBlackButton onClick={() => setBuyPopup(true)}>Buy</SmallBlackButton>
-                <SmallBlackButton onClick={() => setSellPopup(true)}>Sell</SmallBlackButton>
+                <SmallBlackButton onClick={() => handleBuy(index, availableStocks)}>Buy</SmallBlackButton>
+            </AddSellContainer>
+        </StocksComponentContainer>
+    ))
+
+    const userTradesList = ['Adidas', 'Roots', 'RBC', 'Nike', 'Sub', 'Pub', 'Apple']
+    const tradesLength = userTradesList.length
+    const tradesLengthFlag = tradesLength >= 5 ? '190px' : 'unset'
+
+    const listTrades = userTradesList.map((value: any, index: number) => (
+        <TradesComponentContainer key={value}>
+            <Header4>
+                {index + 1}.&nbsp;{userTradesList[index]}
+            </Header4>
+            <AddSellContainer>
+                <SmallBlackButton onClick={() => handleBuy(index, userTradesList)}>Buy</SmallBlackButton>
+                <SmallBlackButton onClick={() => handleSell(index, userTradesList)}>Sell</SmallBlackButton>
             </AddSellContainer>
         </TradesComponentContainer>
     ))
@@ -108,7 +147,7 @@ export const Home = (props: any) => {
                         <UserTextContainer>
                             <MediumBlackButton onClick={() => setHistoryPopup(true)}>History</MediumBlackButton>
                             <AccountContainer>
-                                <Header2>John Smither</Header2>
+                                <Header2>{retrievedName}</Header2>
                                 <img src={user} />
                             </AccountContainer>
                         </UserTextContainer>
@@ -121,28 +160,28 @@ export const Home = (props: any) => {
                     <DataContainer>
                         <img src={wallet} />
                         <DataTextContainer>
-                            <DataValue>$5,912</DataValue>
+                            <DataValue>{tradingBalanceValue}</DataValue>
                             <DataName>Trading Balance</DataName>
                         </DataTextContainer>
                     </DataContainer>
                     <DataContainer>
                         <img src={download} />
                         <DataTextContainer>
-                            <DataValue>$8,426</DataValue>
+                            <DataValue>{investmentValue}</DataValue>
                             <DataName>Investment</DataName>
                         </DataTextContainer>
                     </DataContainer>
                     <DataContainer>
                         <img src={lable} />
                         <DataTextContainer>
-                            <DataValue>185%</DataValue>
+                            <DataValue>{rateofReturnValue}</DataValue>
                             <DataName>Rate of Return</DataName>
                         </DataTextContainer>
                     </DataContainer>
                     <DataContainer>
                         <img src={paper} />
                         <DataTextContainer>
-                            <DataValue>419</DataValue>
+                            <DataValue>{numberOfTradesValue}</DataValue>
                             <DataName>Number of Trades</DataName>
                         </DataTextContainer>
                     </DataContainer>
@@ -151,21 +190,14 @@ export const Home = (props: any) => {
                     <TradesCard>
                         <TradesCardContainer>
                             <Header3>My Trades</Header3>
-                            <TradesContainer>{listNumbers}</TradesContainer>
-                            <img src={stats} width='571' height='258' />
+                            <TradesContainer style={{ height: tradesLengthFlag }}>{listTrades}</TradesContainer>
+                            <img src={stats} width='400' height='200' />
                         </TradesCardContainer>
                     </TradesCard>
                     <StocksCard>
                         <StocksCardContainer>
                             <Header3>Available Stocks</Header3>
-                            <StocksContainer>
-                                <StocksComponentContainer>
-                                    <Header4>ABC Stocks</Header4>
-                                    <AddSellContainer>
-                                        <SmallBlackButton onClick={() => setBuyPopup(true)}>Buy</SmallBlackButton>
-                                    </AddSellContainer>
-                                </StocksComponentContainer>
-                            </StocksContainer>
+                            <StocksContainer style={{ height: listStocks }}>{stocksList}</StocksContainer>
                         </StocksCardContainer>
                     </StocksCard>
                 </BottomContainer>
@@ -175,7 +207,7 @@ export const Home = (props: any) => {
                 <CloseContainer>
                     <img src={exit} style={{ width: '40px' }} onClick={() => setBuyPopup(false)} />
                 </CloseContainer>
-                <Header3>Stock abc buy</Header3>
+                <Header3>{stockList[stockId]} BUY</Header3>
                 <InputContainer>
                     <InputComponentContainer onSubmit={handleSubmit(RetrieveBuyData)}>
                         <InputLabel>Buy more</InputLabel>
@@ -209,7 +241,7 @@ export const Home = (props: any) => {
                 <CloseContainer>
                     <img src={exit} style={{ width: '40px' }} onClick={() => setSellPopup(false)} />
                 </CloseContainer>
-                <Header3>Stock abc sell</Header3>
+                <Header3>{stockList[stockId]} SELL</Header3>
                 <InputContainer>
                     <InputComponentContainer onSubmit={handleSubmit(RetrieveSellData)}>
                         <InputLabel>Sell stocks</InputLabel>
