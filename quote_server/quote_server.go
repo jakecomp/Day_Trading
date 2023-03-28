@@ -69,5 +69,5 @@ func main() {
 	// curl localhost:8002/all
 	router.GET("/all", gen_quote_for_all_stocks)
 
-	router.Run("localhost:8002")
+	router.Run("10.9.0.6:8002")
 }
