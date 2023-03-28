@@ -240,45 +240,6 @@ func socketReader(conn *websocket.Conn) {
 				json.NewDecoder(resp.Body).Decode(&allquote)
 			}
 
-			// resp, err := http.Get("http://10.9.0.6:8002/all")
-			// quote := map[string]quote{}
-
-			// if resp.StatusCode == http.StatusOK {
-
-			// 	// bodyBytes, err := ioutil.ReadAll(resp.Body)
-			// 	if err != nil { //
-			// 		log.Fatal(err)
-			// 	}
-			// 	// bodyString := string(bodyBytes)
-			// 	//err = json.Unmarshal(bodyBytes, quote)
-
-			// 	fmt.Println("Quote Response: ", allquote)
-			// 	if err != nil {
-			// 		fmt.Println("Error decoding Quote")
-			// 		continue
-			// 	} else {
-			// 		// thisStock = allquote[cmd.Args[2]]
-			// 		// log := quote_log{
-			// 		// 	Timestamp:    time.Now().Unix(),
-			// 		// 	Username:     cmd.Args[0],
-			// 		// 	Ticketnumber: cmd.Ticket,
-			// 		// 	Price:        fmt.Sprintf("%v", thisStock.Price),
-			// 		// 	StockSymbol:  thisStock.Stock,
-			// 		// }
-
-			// 		// fmt.Println(log)
-			// 		// log_bytes, err := json.Marshal(log)
-
-			// 		// _, err = http.Post("http://10.9.0.9:8004/quotelog", "application/json", bytes.NewBuffer(log_bytes))
-			// 		// if err != nil {
-			// 		// 	fmt.Println(err)
-			// 		// }
-			// 	}
-
-			// }
-			// else {
-			// 	fmt.Println("Error: Failed to get quote. ", err)
-			// }
 		} else {
 			msg, _ := json.Marshal(*cmd)
 			err = queueServiceConn.Publish(
