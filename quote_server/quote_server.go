@@ -66,6 +66,7 @@ func main() {
 	// To get the stock price of R
 	// curl localhost:8002/R
 	router.GET("/:id", gen_quote_for_stock)
+	// For all stocks
 	// curl localhost:8002/all
 	router.GET("/all", gen_quote_for_all_stocks)
 
