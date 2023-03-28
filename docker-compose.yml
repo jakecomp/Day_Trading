@@ -34,10 +34,10 @@ services:
         ipv4_address: 10.9.0.6
 
   quote_cache:
-    build: ./quote_cache
-    ports:
-      - "6379:6379"
-    depends_on: [quote_server]
+    build: ./quote_queuer
+    # ports:
+    #   - "6379:6379"
+    depends_on: [rabbitmq]
     networks:
       net-10.9.0.0:
         ipv4_address: 10.9.0.11
