@@ -34,7 +34,12 @@ import { useState } from 'react'
 import { BuyPopUp, HistoryPopUp, SellPopUp } from '../components/popups/homePopup'
 import { FieldForm, InputLabel, SignField } from '../components/sign_in/field'
 import { InputComponentContainer, InputContainer } from '../components/sign_in/containers'
-import { CloseContainer } from '../components/popups/containers'
+import {
+    CloseContainer,
+    HistoryComponentContainer,
+    HistoryContainer,
+    HistoryPopupContainer,
+} from '../components/popups/containers'
 import { useForm } from 'react-hook-form'
 
 export const Home = (props: any) => {
@@ -133,6 +138,32 @@ export const Home = (props: any) => {
                 <SmallBlackButton onClick={() => handleSell(index, userTradesList)}>Sell</SmallBlackButton>
             </AddSellContainer>
         </TradesComponentContainer>
+    ))
+
+    const userHistoryList = [
+        'Adidas',
+        'Roots',
+        'RBC',
+        'Nike',
+        'Sub',
+        'Pub',
+        'Apple',
+        'Emia',
+        'Banshee',
+        'Bayern',
+        'Mercedes',
+        'Samsung',
+        'Freeport',
+        'Nord',
+    ]
+    const historyLength = userHistoryList.length
+    const historyLengthFlag = historyLength >= 10 ? '210px' : 'unset'
+    const listHistory = userHistoryList.map((value: any, index: number) => (
+        <HistoryComponentContainer key={value}>
+            <Header4>
+                {index + 1}.&nbsp;{userHistoryList[index]}
+            </Header4>
+        </HistoryComponentContainer>
     ))
 
     return (
@@ -275,6 +306,10 @@ export const Home = (props: any) => {
                 <CloseContainer>
                     <img src={exit} style={{ width: '40px' }} onClick={() => setHistoryPopup(false)} />
                 </CloseContainer>
+                <HistoryPopupContainer>
+                    <Header3>History</Header3>
+                    <HistoryContainer style={{ height: historyLengthFlag }}>{listHistory}</HistoryContainer>
+                </HistoryPopupContainer>
             </HistoryPopUp>
         </div>
     )
