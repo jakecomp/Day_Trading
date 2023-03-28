@@ -1,6 +1,8 @@
 #!/bin/bash
 
-while [ true ] 
+/usr/local/bin/redis-server --daemonize yes &
+
+while [ true ]
 
 do
     content=$(curl -sb -H "Accept: application/json" "http://10.9.0.6:8002")  
