@@ -59,6 +59,7 @@ func gen_quote_for_all_stocks(c *gin.Context) {
 }
 
 func main() {
+	gin.SetMode(gin.ReleaseMode)
 	known_stocks.stocks = make(map[string]quote, 0)
 	fmt.Println("Quote Server runing on Port 8002...")
 	router := gin.Default()
