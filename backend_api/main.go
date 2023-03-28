@@ -98,6 +98,9 @@ func Signup(w http.ResponseWriter, r *http.Request) {
 	doc.Stonks = make(map[string]int)
 
 	// Save User Doc to MongoDB
+	if db == nil {
+		db, ctx = connect()
+	}
 	collection := db.Database(database).Collection("users")
 	result, err := collection.InsertOne(context.TODO(), doc)
 	if err != nil {
@@ -130,8 +133,12 @@ func Signin(w http.ResponseWriter, r *http.Request) {
 
 	// Grab Stored Hash and Compare
 	var result user_doc
+	if db == nil {
+		db, ctx = connect()
+	}
+
 	err = db.Database(database).Collection("users").FindOne(ctx, bson.D{{"username", creds.Username}}).Decode(&result)
-	db.Disconnect(ctx)
+	// db.Disconnect(ctx)
 	if err != nil {
 		fmt.Println("Error search for record: ", err)
 		panic(err)
@@ -204,43 +211,42 @@ func socketReader(conn *websocket.Conn) {
 		} else if cmd.Command == "QUOTE" {
 
 			// Get a quote
-			resp, err := http.Get("http://10.9.0.6:8002")
-			quote := &quote{}
+			// var resp *http.Response
+			allquote := make(map[string]quote)
+			if len(cmd.Args) == 2 {
+				var thisStock quote
+				resp, err := http.Get("http://10.9.0.6:8002/" + cmd.Args[1])
+				if resp.StatusCode != http.StatusOK {
+					fmt.Println("Error: Failed to get quote. ", err)
 
-			if resp.StatusCode == http.StatusOK {
-
-				json.NewDecoder(resp.Body).Decode(quote)
-
-				bodyBytes, err := ioutil.ReadAll(resp.Body)
-				if err != nil {
-					log.Fatal(err)
 				}
-				bodyString := string(bodyBytes)
-				//err = json.Unmarshal(bodyBytes, quote)
-				fmt.Println("Quote Response: ", bodyString)
-				if err != nil {
-					fmt.Println("Error decoding Quote")
-				} else {
-					log := quote_log{
-						Timestamp:    time.Now().Unix(),
-						Username:     cmd.Args[0],
-						Ticketnumber: cmd.Ticket,
-						Price:        fmt.Sprintf("%v", quote.Price),
-						StockSymbol:  quote.Stock,
-					}
-
-					fmt.Println(log)
-					log_bytes, err := json.Marshal(log)
-
-					_, err = http.Post("http://10.9.0.9:8004/quotelog", "application/json", bytes.NewBuffer(log_bytes))
-					if err != nil {
-						fmt.Println(err)
-					}
+				json.NewDecoder(resp.Body).Decode(&thisStock)
+				allquote[thisStock.Stock] = thisStock
+				log := quote_log{
+					Timestamp:    time.Now().Unix(),
+					Username:     cmd.Args[0],
+					Ticketnumber: cmd.Ticket,
+					Price:        fmt.Sprintf("%v", thisStock.Price),
+					StockSymbol:  thisStock.Stock,
 				}
 
+				fmt.Println(log)
+				log_bytes, err := json.Marshal(log)
+
+				_, err = http.Post("http://10.9.0.9:8004/quotelog", "application/json", bytes.NewBuffer(log_bytes))
+				if err != nil {
+					fmt.Println(err)
+				}
 			} else {
-				fmt.Println("Error: Failed to get quote. ", err)
+				// TODO we need a way to log all quotes
+				resp, err := http.Get("http://10.9.0.6:8002/all")
+				if resp.StatusCode != http.StatusOK {
+					fmt.Println("Error: Failed to get quote. ", err)
+
+				}
+				json.NewDecoder(resp.Body).Decode(&allquote)
 			}
+
 		} else {
 			msg, _ := json.Marshal(*cmd)
 			err = queueServiceConn.Publish(
@@ -320,7 +326,7 @@ func connect() (*mongo.Client, context.Context) {
 	clientOptions := options.Client()
 	clientOptions.ApplyURI("mongodb://admin:admin@10.9.0.3:27017")
 	// clientOptions.ApplyURI("mongodb://admin:admin@localhost:27017")
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Hour)
+	ctx := context.Background()
 	client, err := mongo.Connect(ctx, clientOptions)
 
 	if err != nil {

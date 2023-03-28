@@ -61,6 +61,7 @@ func parseCmds(r *bufio.Reader) chan Command {
 			}
 			c <- *cmd
 		}
+		close(c)
 	}()
 	return c
 }
@@ -160,6 +161,4 @@ func main() {
 	c := connectToSocket(tok)
 	defer c.Close()
 	forwardCommands(cmds, c)
-	os.Exit(1)
-
 }

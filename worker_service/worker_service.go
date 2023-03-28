@@ -380,7 +380,7 @@ func UserAccountManager(mb *MessageBus) {
 
 func getQuote(stock string) Stock {
 	var stonks Stock
-	rsp, err := http.Get("http://10.9.0.6:8002")
+	rsp, err := http.Get("http://10.9.0.6:8002/" + stock)
 	if err != nil {
 		log.Fatal(err)
 	}
