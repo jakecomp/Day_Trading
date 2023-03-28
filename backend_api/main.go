@@ -98,6 +98,9 @@ func Signup(w http.ResponseWriter, r *http.Request) {
 	doc.Stonks = make(map[string]int)
 
 	// Save User Doc to MongoDB
+	if db == nil {
+		db, ctx = connect()
+	}
 	collection := db.Database(database).Collection("users")
 	result, err := collection.InsertOne(context.TODO(), doc)
 	if err != nil {
@@ -130,8 +133,12 @@ func Signin(w http.ResponseWriter, r *http.Request) {
 
 	// Grab Stored Hash and Compare
 	var result user_doc
+	if db == nil {
+		db, ctx = connect()
+	}
+
 	err = db.Database(database).Collection("users").FindOne(ctx, bson.D{{"username", creds.Username}}).Decode(&result)
-	db.Disconnect(ctx)
+	// db.Disconnect(ctx)
 	if err != nil {
 		fmt.Println("Error search for record: ", err)
 		panic(err)
@@ -319,7 +326,7 @@ func connect() (*mongo.Client, context.Context) {
 	clientOptions := options.Client()
 	clientOptions.ApplyURI("mongodb://admin:admin@10.9.0.3:27017")
 	// clientOptions.ApplyURI("mongodb://admin:admin@localhost:27017")
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Hour)
+	ctx := context.Background()
 	client, err := mongo.Connect(ctx, clientOptions)
 
 	if err != nil {

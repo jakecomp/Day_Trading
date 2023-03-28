@@ -107,6 +107,9 @@ const (
 
 func read_db(username string, add_command bool, db *mongo.Client, ctx context.Context) (user_collection *user_doc, err error) {
 
+	if db == nil {
+		db, ctx = connect()
+	}
 	var result user_doc
 	err = db.Database(database).Collection("users").FindOne(ctx, bson.D{{"username", username}}).Decode(&result)
 
@@ -139,14 +142,15 @@ func read_db(username string, add_command bool, db *mongo.Client, ctx context.Co
 }
 
 func update_db(new_doc *user_doc, db *mongo.Client, ctx context.Context) {
-
-	var err error
+	if db == nil {
+		db, ctx = connect()
+	}
 
 	collection := db.Database(database).Collection("users")
 
 	selected_user := bson.M{"username": new_doc.Username}
 	updated_user := bson.M{"$set": bson.M{"balance": new_doc.Balance, "stonks": new_doc.Stonks}}
-	_, err = collection.UpdateOne(context.TODO(), selected_user, updated_user)
+	_, err := collection.UpdateOne(context.TODO(), selected_user, updated_user)
 
 	if err != nil {
 		fmt.Println("Error inserting into db: ", err)
