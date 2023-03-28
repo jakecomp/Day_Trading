@@ -62,6 +62,15 @@ type errorEvent struct {
 	Ticketnumber int      `xml:"transactionNum" json:"ticketnumber"`
 	Command      []string `xml:"command" json:"command"`
 	Username     string   `xml:"username" json:"username"`
+	DebugMessage string   `xml:"errorMessage" json:"message"`
+}
+
+type debugEvent struct {
+	Timestamp    int64    `xml:"timestamp"`
+	ServerName   string   `xml:"server" json:"server"`
+	Ticketnumber int      `xml:"transactionNum" json:"ticketnumber"`
+	Command      []string `xml:"command" json:"command"`
+	DebugMessage string   `xml:"debugMessage" json:"message"`
 }
 
 type dumplogEvent struct {
@@ -136,6 +145,8 @@ func handleRequests() {
 	http.HandleFunc("/systemlog", systemlog)
 
 	http.HandleFunc("/errorlog", errorlog)
+
+	http.HandleFunc("/debuglog", debuglog)
 
 	http.HandleFunc("/dumplog", dumplog)
 
@@ -249,6 +260,23 @@ func errorlog(w http.ResponseWriter, r *http.Request) {
 	//_ = xml.NewEncoder(*xmlwriter).Encode(recive_log)
 	out, _ := xml.MarshalIndent(recive_log, "", "\t")
 	//fmt.Println(string(out))
+	f.WriteString(string(out))
+	f.WriteString("\n")
+}
+
+func debuglog(w http.ResponseWriter, r *http.Request) {
+	recive_log := &debugEvent{}
+	err := json.NewDecoder(r.Body).Decode(recive_log)
+	if err != nil {
+		// If there is something wrong with the request body, return a 400 status
+		fmt.Println("Error with request format")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	recive_log.Timestamp = timestamp()
+	//_ = xml.NewEncoder(*xmlwriter).Encode(recive_log)
+	out, _ := xml.MarshalIndent(recive_log, "", "\t")
+	// fmt.Println(string(out))
 	f.WriteString(string(out))
 	f.WriteString("\n")
 }

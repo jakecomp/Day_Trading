@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,9 +13,11 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gorilla/websocket"
 	"github.com/streadway/amqp"
+	"go.mongodb.org/mongo-driver/mongo"
 )
+
+const DEBUG = true
 
 type userid string
 type Args []string
@@ -39,6 +42,15 @@ type account_log struct {
 	Action       []string `xml:"action,attr" json:"action"`
 }
 
+// Used for errors and debugging
+type debugEvent struct {
+	Timestamp    int64
+	ServerName   string   `json:"server"`
+	Ticketnumber int64    `json:"ticketnumber"`
+	Command      []string `json:"command"`
+	Username     string   `json:"username"`
+	DebugMessage string   `json:"message"`
+}
 type Command struct {
 	Ticket  int
 	Command string
@@ -66,8 +78,8 @@ func NewUser() *User {
 	}
 }
 
-// Internal DB of user state
-var users map[userid]*User
+// // Internal DB of user state
+// var users map[userid]*User
 
 // Dispatch commands based on the command string given
 func dispatch(cmd Command) (CMD, error) {
@@ -97,20 +109,13 @@ func dispatch(cmd Command) (CMD, error) {
 		notifyCANCEL_SELL: func(cmd Command) (CMD, error) {
 			return &CANCEL_SELL{ticket: int64(cmd.Ticket), userId: cmd.Args[0]}, nil
 		},
-		notifySET_SELL_TRIGGER: func(cmd Command) (CMD, error) {
-			return SET_SELL_TRIGGER{ticket: int64(cmd.Ticket), userId: cmd.Args[0]}, nil
+		notifyFORCE_BUY: func(cmd Command) (CMD, error) {
+			a, err := strconv.ParseFloat(cmd.Args[2], 64)
+			return &FORCE_BUY{ticket: int64(cmd.Ticket), userId: cmd.Args[0], stock: cmd.Args[1], amount: a}, err
 		},
-		notifySET_SELL_AMOUNT: func(cmd Command) (CMD, error) {
-			return SET_SELL_AMOUNT{ticket: int64(cmd.Ticket), userId: cmd.Args[0]}, nil
-		},
-		notifySET_BUY_TRIGGER: func(cmd Command) (CMD, error) {
-			return SET_BUY_TRIGGER{ticket: int64(cmd.Ticket), userId: cmd.Args[0]}, nil
-		},
-		notifyCANCEL_BUY_TRIGGER: func(cmd Command) (CMD, error) {
-			return CANCEL_BUY_TRIGGER{ticket: int64(cmd.Ticket), userId: cmd.Args[0]}, nil
-		},
-		notifySET_BUY_AMOUNT: func(cmd Command) (CMD, error) {
-			return SET_BUY_AMOUNT{ticket: int64(cmd.Ticket), userId: cmd.Args[0]}, nil
+		notifyFORCE_SELL: func(cmd Command) (CMD, error) {
+			a, err := strconv.ParseFloat(cmd.Args[2], 64)
+			return &FORCE_SELL{ticket: int64(cmd.Ticket), userId: cmd.Args[0], stock: cmd.Args[1], amount: a}, err
 		},
 	}
 	f := funcLookup[cmd.Command]
@@ -120,22 +125,6 @@ func dispatch(cmd Command) (CMD, error) {
 	return funcLookup[cmd.Command](cmd)
 }
 
-// Enqueue a new command to the queue server
-// not used in this current implementation
-func pushCommand(conn *websocket.Conn, t *Command) error {
-	// Event Loop, Handle Comms in here
-	fmt.Println("transaction: ", *t)
-
-	message := &Message{"ENQUEUE", t}
-	msg, _ := json.Marshal(*message)
-
-	err := conn.WriteMessage(websocket.TextMessage, msg)
-	if err != nil {
-		return err
-	}
-	return err
-}
-
 // TODO avoid this blocking for to avoid unnecssecary blocking on main thread
 func getNextCommand(msgs <-chan amqp.Delivery) (*Command, error) {
 	for {
@@ -143,16 +132,13 @@ func getNextCommand(msgs <-chan amqp.Delivery) (*Command, error) {
 		resp := <-msgs
 		var cmd Command
 		err := json.Unmarshal(resp.Body, &cmd)
-		if err != nil {
-			return nil, err
-		}
-		return &cmd, nil
+		return &cmd, err
 	}
 
 }
 
 // Used for logging anything related to a users account
-func sendAccountLog(n *Notification, bal float64) {
+func sendAccountLog(n *Notification, bal float32) {
 	a := account_log{
 		Username: n.Userid,
 		// Funds:        fmt.Sprint(bal),
@@ -195,21 +181,34 @@ func sendUserLog(n Notification) {
 	}
 }
 
-// Not currently used
-// func sendSystemLog(n *Notification) {
-// 	s := system_log{
-// 		Username: n.Userid,
-// 		// Funds:        fmt.Sprint(users[userid(n.Userid)].Balance),
-// 		Ticketnumber: int(n.Ticket),
-// 		Command:      []string{n.Topic},
-// 	}
-// 	ulog, _ := json.Marshal(s)
-// 	bodyReader := bytes.NewReader(ulog)
-// 	_, err := http.Post("http://10.9.0.9:8004/systemlog", "application/json", bodyReader)
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
-// }
+func sendErrorLog(ticket int64, msg string) {
+	ulog, _ := json.Marshal(debugEvent{
+		ServerName:   "worker",
+		Ticketnumber: ticket,
+		DebugMessage: msg,
+	})
+	bodyReader := bytes.NewReader(ulog)
+	_, err := http.Post("http://10.9.0.9:8004/errorlog", "application/json", bodyReader)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func sendDebugLog(ticket int64, msg string) {
+	if DEBUG {
+		ulog, _ := json.Marshal(debugEvent{
+			ServerName:   "worker",
+			Ticketnumber: ticket,
+			DebugMessage: msg,
+		})
+		bodyReader := bytes.NewReader(ulog)
+		_, err := http.Post("http://10.9.0.9:8004/debuglog", "application/json", bodyReader)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+	}
+}
 
 // Logs incomming commands
 func commandLogger(nch <-chan Notification) {
@@ -223,13 +222,123 @@ type StockQuantity struct {
 	Quantity  int64
 }
 
-// TODO clean this up there is so much repreated code
-// TODO Publish errors as needed
+func addMoney(newMoney Notification, db *mongo.Client, ctx *context.Context) error {
+	uid := userid(newMoney.Userid)
+
+	current_user_doc, err := read_db(string(uid), true, db, *ctx)
+
+	if current_user_doc == nil {
+		db, ctx := connect()
+		current_user_doc, err = read_db(string(uid), true, db, ctx)
+	}
+
+	sendDebugLog(int64(newMoney.Ticket),
+		fmt.Sprint("user doc before adding money\n",
+			current_user_doc, "for notification\n",
+			newMoney))
+
+	current_user_doc.Balance += float32(*newMoney.Amount)
+
+	newMoney.Topic = "add"
+	sendAccountLog(&newMoney, current_user_doc.Balance)
+
+	sendDebugLog(int64(newMoney.Ticket),
+		fmt.Sprint("user doc after adding money\n",
+			current_user_doc, "for notification\n",
+			newMoney))
+
+	update_db(current_user_doc, db, *ctx)
+	return err
+}
+func sellStock(price float64, newMoney Notification, db *mongo.Client, ctx *context.Context) error {
+	uid := userid(newMoney.Userid)
+
+	current_user_doc, err := read_db(string(uid), false, db, *ctx)
+
+	if current_user_doc == nil {
+		db, ctx := connect()
+		current_user_doc, err = read_db(string(uid), false, db, ctx)
+	}
+
+	if err != nil {
+		return err
+	}
+	stock_owned, ok := current_user_doc.Stonks[*newMoney.Stock]
+	if !ok || stock_owned <= 0 {
+		return errors.New(fmt.Sprint("ERROR: less than 0 stock available", *newMoney.Stock, *newMoney.Stock, " for price ", price))
+	}
+
+	sendDebugLog(int64(newMoney.Ticket),
+		fmt.Sprint("user doc before sale money\n",
+			current_user_doc, "for notification\n",
+			newMoney))
+
+	current_user_doc.Balance += float32(*newMoney.Amount)
+	current_user_doc.Stonks[*newMoney.Stock] -= *newMoney.Amount / price
+
+	newMoney.Topic = "add"
+	sendAccountLog(&newMoney, current_user_doc.Balance)
+
+	sendDebugLog(int64(newMoney.Ticket), fmt.Sprint("user doc after sale money\n",
+		current_user_doc, "for notification\n",
+		newMoney))
+
+	update_db(current_user_doc, db, *ctx)
+	return nil
+}
+func buyStock(price float64, newMoney Notification, db *mongo.Client, ctx *context.Context) error {
+	uid := userid(newMoney.Userid)
+
+	current_user_doc, err := read_db(string(uid), false, db, *ctx)
+
+	if current_user_doc == nil {
+		db, ctx := connect()
+		current_user_doc, err = read_db(string(uid), false, db, ctx)
+	}
+
+	if err != nil {
+		return err
+	}
+	sendDebugLog(int64(newMoney.Ticket),
+		fmt.Sprint("user doc before purchase money\n",
+			current_user_doc, "for notification\n",
+			newMoney, " with buy amount ", *newMoney.Amount, " of stock ", *newMoney.Stock, "\n",
+			"With a value of:", price))
+
+	current_user_doc.Balance -= float32(*newMoney.Amount)
+	if current_user_doc.Balance < 0 {
+		return errors.New(fmt.Sprint("Negative balance is not allowed during buy for ", *newMoney.Stock, " for price ", price))
+	}
+
+	_, ok := current_user_doc.Stonks[*newMoney.Stock]
+	if !ok {
+		current_user_doc.Stonks[*newMoney.Stock] = *newMoney.Amount / price
+	} else {
+		current_user_doc.Stonks[*newMoney.Stock] += *newMoney.Amount / price
+	}
+
+	sendDebugLog(int64(newMoney.Ticket),
+		fmt.Sprint("user doc after purchase money\n",
+			current_user_doc,
+			"for notification\n",
+			newMoney,
+			" with buy amount ", *newMoney.Amount, " of stock ", *newMoney.Stock, "\n",
+			"With a value of:", price))
+
+	newMoney.Topic = "remove"
+	sendAccountLog(&newMoney, current_user_doc.Balance)
+
+	update_db(current_user_doc, db, *ctx)
+	return err
+}
+
 func UserAccountManager(mb *MessageBus) {
-	users = make(map[userid]*User)
+	// users = make(map[userid]*User)
 	add := mb.SubscribeAll(notifyADD)
 	buy := mb.SubscribeAll(notifyCOMMIT_BUY)
 	sell := mb.SubscribeAll(notifyCOMMIT_SELL)
+	force_buy := mb.SubscribeAll(notifyFORCE_BUY)
+	force_sell := mb.SubscribeAll(notifyFORCE_SELL)
 
 	stockPrice := mb.SubscribeAll(notifySTOCK_PRICE)
 
@@ -240,101 +349,31 @@ func UserAccountManager(mb *MessageBus) {
 
 	db, ctx := connect()
 	defer db.Disconnect(ctx)
-
+	var err error
 	for {
+		last_ticket := -1
+
 		select {
 		case t2price := <-stockPrice:
 			price = *t2price.Amount
 		case newMoney := <-add:
-			uid := userid(newMoney.Userid)
-
-			if users[uid] == nil {
-				users[uid] = NewUser()
-			}
-
-			users[uid].Balance += *newMoney.Amount
-			newMoney.Topic = "add"
-			sendAccountLog(&newMoney, users[uid].Balance)
-
-			var current_user_doc = *read_db(string(uid), true, db, ctx)
-
-			if &current_user_doc == nil {
-				db, ctx := connect()
-				current_user_doc = *read_db(string(uid), true, db, ctx)
-			}
-
-			current_user_doc.Balance += float32(*newMoney.Amount)
-			update_db(&current_user_doc, db, ctx)
-
-		case newMoney := <-sell:
-			uid := userid(newMoney.Userid)
-
-			if users[uid] == nil {
-				users[uid] = NewUser()
-			}
-
-			if users[uid].Stocks[*newMoney.Stock] == nil {
-				fmt.Print("ERROR: Trying to sell stock user doesn't own", *newMoney.Stock, " for price ", price)
-				continue
-			}
-
-			users[uid].Balance += *newMoney.Amount
-			users[uid].Stocks[*newMoney.Stock].Quantity -= int64(*newMoney.Amount / price)
-			if users[uid].Stocks[*newMoney.Stock].Quantity < 0 {
-				fmt.Print("less than 0 stock available", *newMoney.Stock, *newMoney.Stock, " for price ", price)
-				continue
-			}
-			newMoney.Topic = "add"
-			fmt.Println("selling")
-			sendAccountLog(&newMoney, users[uid].Balance)
-
-			var current_user_doc = *read_db(string(uid), false, db, ctx)
-
-			if &current_user_doc == nil {
-				db, ctx := connect()
-				current_user_doc = *read_db(string(uid), false, db, ctx)
-			}
-
-			current_user_doc.Balance += float32(*newMoney.Amount)
-			current_user_doc.Stonks[*newMoney.Stock] -= int(*newMoney.Amount / price)
-			update_db(&current_user_doc, db, ctx)
-
-		case newMoney := <-buy:
-			uid := userid(newMoney.Userid)
-
-			if users[uid] == nil {
-				users[uid] = NewUser()
-			}
-
-			if users[uid].Balance < *newMoney.Amount {
-				fmt.Print("Negative balance is not allowed during buy for ", *newMoney.Stock, " for price ", price)
-				continue
-			}
-
-			users[uid].Balance -= *newMoney.Amount
-
-			var current_user_doc = *read_db(string(uid), false, db, ctx)
-
-			if &current_user_doc == nil {
-				db, ctx := connect()
-				current_user_doc = *read_db(string(uid), false, db, ctx)
-			}
-
-			current_user_doc.Balance -= float32(*newMoney.Amount)
-			if users[uid].Stocks[*newMoney.Stock] == nil {
-				users[uid].Stocks[*newMoney.Stock] = &StockQuantity{
-					StockName: *newMoney.Stock,
-					Quantity:  int64(*newMoney.Amount / price),
-				}
-
-				current_user_doc.Stonks[*newMoney.Stock] = int(*newMoney.Amount / price)
-			} else {
-				users[uid].Stocks[*newMoney.Stock].Quantity += int64(*newMoney.Amount / price)
-				current_user_doc.Stonks[*newMoney.Stock] += int(*newMoney.Amount / price)
-			}
-			newMoney.Topic = "remove"
-			sendAccountLog(&newMoney, users[uid].Balance)
-			update_db(&current_user_doc, db, ctx)
+			err = addMoney(newMoney, db, &ctx)
+			last_ticket = int(newMoney.Ticket)
+		case sale := <-sell:
+			sellStock(price, sale, db, &ctx)
+			last_ticket = int(sale.Ticket)
+		case sale := <-force_sell:
+			sellStock(price, sale, db, &ctx)
+			last_ticket = int(sale.Ticket)
+		case purchase := <-buy:
+			buyStock(price, purchase, db, &ctx)
+			last_ticket = int(purchase.Ticket)
+		case purchase := <-force_buy:
+			buyStock(price, purchase, db, &ctx)
+			last_ticket = int(purchase.Ticket)
+		}
+		if err != nil {
+			sendErrorLog(int64(last_ticket), fmt.Sprint("ERROR:", err))
 		}
 	}
 }
@@ -487,12 +526,6 @@ func main() {
 		notifyCOMMIT_SELL,
 		notifyCANCEL_BUY,
 		notifyCANCEL_SELL,
-		notifyCANCEL_SET_SELL,
-		notifySET_SELL_TRIGGER,
-		notifySET_SELL_AMOUNT,
-		notifySET_BUY_TRIGGER,
-		notifyCANCEL_BUY_TRIGGER,
-		notifySET_BUY_AMOUNT,
 	}
 	nch := make(chan Notification)
 	go commandLogger(nch)
@@ -517,6 +550,7 @@ func main() {
 		default:
 			t, err := getNextCommand(msgs)
 			cmd, err := dispatch(*t)
+
 			if err == nil {
 				// Execute this new command
 				waitChan <- struct{}{}
@@ -526,7 +560,7 @@ func main() {
 				// queue server for too long
 				// time.Sleep(time.Millisecond * 1)
 			} else {
-				fmt.Println("ERROR:", err)
+				sendErrorLog(int64(t.Ticket), fmt.Sprint("ERROR:", err))
 			}
 		}
 
