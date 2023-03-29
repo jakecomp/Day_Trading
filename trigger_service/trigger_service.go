@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	//"io/ioutil"
+	"bytes"
 	"log"
 	"net/http"
 	"strconv"
@@ -49,6 +50,8 @@ type UserTriggers struct {
 
 var userMap map[string]UserTriggers
 
+var stocks map[string]quote
+
 var upgrader = websocket.Upgrader{}
 var rabbitChannel *amqp.Channel
 var queue amqp.Queue
@@ -80,6 +83,7 @@ func set_ammount(cmd string, user string, stock string, amount float64) {
 	trigger, ok := userMap[user].Triggers[triggerKey]
 	if ok {
 		trigger.Amount = amount
+
 	} else {
 		trigger = Trigger{}
 		trigger.Stock = stock
@@ -94,6 +98,7 @@ func set_trigger(cmd string, user string, stock string, price float64) {
 	// Make Map Key (Stock, Command)
 	triggerKey := TriggerKey{}
 	triggerKey.Command = cmd
+
 	triggerKey.Stock = stock
 
 	trigger, ok := userMap[user].Triggers[triggerKey]
@@ -101,6 +106,73 @@ func set_trigger(cmd string, user string, stock string, price float64) {
 	if ok {
 		trigger.Price = price
 		userMap[user].Triggers[triggerKey] = trigger
+	}
+}
+
+func push_trigger(user_id string, current_price float64, current_triger Trigger, queue_name string) {
+
+	conn, _ := dial("amqp://guest:guest@10.9.0.10:5672/")
+	ch, err := conn.Channel()
+	failOnError(err, "FAILED TO CONNECT TO rabbitMQ")
+
+	q, err_2 := ch.QueueDeclare(
+		queue_name, // Queue name
+		false,      // Durable
+		false,      // Delete when unused
+		false,      // Exclusive
+		false,      // No-wait
+		nil,        // Arguments
+	)
+
+	failOnError(err_2, "FAILED TO DECLARE FORCE BUY / SELL QUEUE")
+
+	// NEED TO FIGURE OUT HOW TO CREATE COMMAND PROPERLY
+	string_amount := fmt.Sprintf("%f", current_triger.Amount)
+	string_price := fmt.Sprintf("%f", current_price)
+	cmd := &command{0, queue_name, []string{user_id, string_amount, string_price, current_triger.Stock}}
+
+	// CONVERT COMMAND TO BYTES ARRAY
+	command_bytes := new(bytes.Buffer)
+	json.NewEncoder(command_bytes).Encode(cmd)
+
+	err_3 := ch.Publish(
+		"",     // name
+		q.Name, // routing key
+		false,  // mandatory
+		false,  // immediate
+		amqp.Publishing{
+			ContentType: "text/plain",
+			Body:        []byte(command_bytes.Bytes()),
+		})
+	failOnError(err_3, "COULD NOT PUSH TO FORCE BUY / SELL QUEUE")
+
+}
+
+func check_trigger() {
+
+	// Iterate through each user
+
+	for user_key, all_triggers := range userMap {
+
+		// Iterate through each trigger for this user
+		for trigger_key, current_trigger := range all_triggers.Triggers {
+
+			current_price := stocks[trigger_key.Stock].Price
+			trigger_price := current_trigger.Price
+
+			if trigger_key.Command == "BUY" {
+				if current_price <= trigger_price {
+					push_trigger(user_key, current_price, current_trigger, "FORCE_BUY")
+
+				}
+			} else if trigger_key.Command == "SELL" {
+				if current_price >= trigger_price {
+					push_trigger(user_key, current_price, current_trigger, "FORCE_SELL")
+				}
+			} else {
+				fmt.Println("UNKNOWN TRIGGER COMMAND")
+			}
+		}
 	}
 }
 
@@ -294,6 +366,8 @@ func clientCode(conn *amqp.Connection) {
 	go func() {
 		for d := range msgs {
 			// Call function for checking stocks for updates
+
+			json.Unmarshal(d.Body, &stocks)
 			log.Printf(" [x] got %s", d.Body)
 		}
 	}()
