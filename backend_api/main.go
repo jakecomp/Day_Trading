@@ -211,42 +211,26 @@ func socketReader(conn *websocket.Conn) {
 		} else if cmd.Command == "QUOTE" {
 
 			// Get a quote
-			// var resp *http.Response
 			allquote := make(map[string]quote)
-			if len(cmd.Args) == 2 {
-				var thisStock quote
-				resp, err := http.Get("http://10.9.0.6:8002/" + cmd.Args[1])
-				if resp.StatusCode != http.StatusOK {
-					fmt.Println("Error: Failed to get quote. ", err)
+			var thisStock quote
+			resp, err := http.Get("http://10.9.0.6:8002/" + cmd.Args[1])
+			if resp.StatusCode != http.StatusOK {
+				fmt.Println("Error: Failed to get quote. ", err)
 
-				}
-				json.NewDecoder(resp.Body).Decode(&thisStock)
-				allquote[thisStock.Stock] = thisStock
-				log := quote_log{
-					Timestamp:    time.Now().Unix(),
-					Username:     cmd.Args[0],
-					Ticketnumber: cmd.Ticket,
-					Price:        fmt.Sprintf("%v", thisStock.Price),
-					StockSymbol:  thisStock.Stock,
-				}
-
-				// fmt.Println(log)
-				log_bytes, err := json.Marshal(log)
-
-				go http.Post("http://10.9.0.9:8004/quotelog", "application/json", bytes.NewBuffer(log_bytes))
-				// if err != nil {
-				// 	fmt.Println(err)
-				// }
-			} else {
-				// TODO we need a way to log all quotes
-				resp, err := http.Get("http://10.9.0.6:8002/all")
-				if resp.StatusCode != http.StatusOK {
-					fmt.Println("Error: Failed to get quote. ", err)
-
-				}
-				json.NewDecoder(resp.Body).Decode(&allquote)
+			}
+			json.NewDecoder(resp.Body).Decode(&thisStock)
+			allquote[thisStock.Stock] = thisStock
+			log := quote_log{
+				Timestamp:    time.Now().Unix(),
+				Username:     cmd.Args[0],
+				Ticketnumber: cmd.Ticket,
+				Price:        fmt.Sprintf("%v", thisStock.Price),
+				StockSymbol:  thisStock.Stock,
 			}
 
+			log_bytes, err := json.Marshal(log)
+
+			go http.Post("http://10.9.0.9:8004/quotelog", "application/json", bytes.NewBuffer(log_bytes))
 		} else {
 			msg, _ := json.Marshal(*cmd)
 			err = queueServiceConn.Publish(
