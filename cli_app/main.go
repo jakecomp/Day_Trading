@@ -132,13 +132,13 @@ func forwardCommands(cmds chan Command, c *websocket.Conn) {
 			log.Println("failed during command marshelling ", err)
 		}
 		err = c.WriteMessage(websocket.TextMessage, jcmd)
-		mType, m, err := c.ReadMessage()
+		// mType, m, err := c.ReadMessage()
 		if err != nil {
 			log.Fatal("error on read message: ", err, cmd)
 		}
-		if mType == websocket.TextMessage {
-			log.Println(string(m))
-		}
+		// if mType == websocket.TextMessage {
+		// 	log.Println(string(m))
+		// }
 	}
 
 }

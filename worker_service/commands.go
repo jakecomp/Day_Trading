@@ -61,7 +61,6 @@ type Transaction struct {
 type CMD interface {
 	Notify() Notification
 	Prerequsite(*MessageBus) error
-	Execute(ch chan *Transaction) error
 	Postrequsite(*MessageBus) error
 }
 
