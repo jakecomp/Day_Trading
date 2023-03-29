@@ -17,7 +17,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-const DEBUG = true
+const DEBUG = false
 
 type userid string
 type Args []string
@@ -331,7 +331,20 @@ func buyStock(price float64, newMoney Notification, db *mongo.Client, ctx *conte
 	update_db(current_user_doc, db, *ctx)
 	return err
 }
+func lookupPrice(stock string, ticket int64, stockPrices map[string]Stock) Stock {
+	p, ok := stockPrices[stock]
+	// Fallback if we still don't have a stock price
+	if !ok {
+		p = getQuote(stock)
 
+		sendDebugLog(int64(ticket),
+			fmt.Sprint("Had to look up stock manually for",
+				stock, "and got \n",
+				p.Name, "for ", p.Price))
+	}
+	return p
+
+}
 func UserAccountManager(mb *MessageBus) {
 	// users = make(map[userid]*User)
 	add := mb.SubscribeAll(notifyADD)
@@ -341,12 +354,8 @@ func UserAccountManager(mb *MessageBus) {
 	force_sell := mb.SubscribeAll(notifyFORCE_SELL)
 
 	stockPrice := mb.SubscribeAll(notifySTOCK_PRICE)
+	// Map storing all the currently known stock prices
 	stockPrices := make(map[string]Stock)
-
-	// We need a starting price before we can start these operations
-	// tprice := <-stockPrice
-
-	// price := *tprice.Amount
 
 	db, ctx := connect()
 	defer db.Disconnect(ctx)
@@ -366,52 +375,22 @@ func UserAccountManager(mb *MessageBus) {
 			err = addMoney(newMoney, db, &ctx)
 			last_ticket = int(newMoney.Ticket)
 		case sale := <-sell:
-			p, ok := stockPrices[*sale.Stock]
-			// Fallback if we still don't have a stock price
-			if !ok {
-				p = getQuote(*sale.Stock)
-
-				sendDebugLog(int64(sale.Ticket),
-					fmt.Sprint("Had to look up stock manually for",
-						*sale.Stock, "and got \n",
-						p.Name, "for ", p.Price))
-			}
+			p := lookupPrice(*sale.Stock, sale.Ticket, stockPrices)
 			sellStock(p.Price, sale, db, &ctx)
 			last_ticket = int(sale.Ticket)
 		case sale := <-force_sell:
-			p, ok := stockPrices[*sale.Stock]
 			// Fallback if we still don't have a stock price
-			if !ok {
-				p = getQuote(*sale.Stock)
-				sendDebugLog(int64(sale.Ticket),
-					fmt.Sprint("Had to look up stock manually for",
-						*sale.Stock, "and got \n",
-						p.Name, "for ", p.Price))
-			}
+			p := lookupPrice(*sale.Stock, sale.Ticket, stockPrices)
 			sellStock(p.Price, sale, db, &ctx)
 			last_ticket = int(sale.Ticket)
 		case purchase := <-buy:
-			p, ok := stockPrices[*purchase.Stock]
-			// Fallback if we still don't have a stock price
-			if !ok {
-				p = getQuote(*purchase.Stock)
-				sendDebugLog(int64(purchase.Ticket),
-					fmt.Sprint("Had to look up stock manually for",
-						*purchase.Stock, "and got \n",
-						p.Name, "for ", p.Price))
-			}
+			p := lookupPrice(*purchase.Stock, purchase.Ticket, stockPrices)
+			// Fallback if we still don't have a stock prices
 			buyStock(p.Price, purchase, db, &ctx)
 			last_ticket = int(purchase.Ticket)
 		case purchase := <-force_buy:
-			p, ok := stockPrices[*purchase.Stock]
+			p := lookupPrice(*purchase.Stock, purchase.Ticket, stockPrices)
 			// Fallback if we still don't have a stock price
-			if !ok {
-				p = getQuote(*purchase.Stock)
-				sendDebugLog(int64(purchase.Ticket),
-					fmt.Sprint("Had to look up stock manually for",
-						*purchase.Stock, "and got \n",
-						p.Name, "for ", p.Price))
-			}
 			buyStock(p.Price, purchase, db, &ctx)
 			last_ticket = int(purchase.Ticket)
 		}
