@@ -3,7 +3,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+
+	//"io/ioutil"
 	"log"
 	"net/http"
 	"strconv"
@@ -49,7 +50,7 @@ type UserTriggers struct {
 var userMap map[string]UserTriggers
 
 var upgrader = websocket.Upgrader{}
-var queueServiceConn *amqp.Channel
+var rabbitChannel *amqp.Channel
 var queue amqp.Queue
 
 func handleRequests() {
@@ -189,7 +190,7 @@ func dial(url string) (*amqp.Connection, error) {
 // }
 
 func main() {
-	log.SetOutput(ioutil.Discard)
+	//log.SetOutput(ioutil.Discard)
 
 	// Connect to RabbitMQ server
 	time.Sleep(time.Second * 15)
@@ -197,14 +198,14 @@ func main() {
 	failOnError(err, "Failed to connect to RabbitMQ")
 	defer conn.Close()
 
-	queue, queueServiceConn = connectQueue(conn)
-	defer queueServiceConn.Close()
+	queue, rabbitChannel = connectQueue(conn)
+	defer rabbitChannel.Close()
 
 	userMap = make(map[string]UserTriggers)
 
 	log.Println("RUNNING ON PORT 8004...")
-	clientCode(conn)
-	//handleRequests()
+	go clientCode(conn)
+	handleRequests()
 }
 
 // ======= From Here On This Can Be Used For Implementing The Trigger Service =====
@@ -257,6 +258,7 @@ func setupStockListener(conn *amqp.Connection) (*amqp.Queue, *amqp.Channel, erro
 	failOnError(err, "Failed to bind a queue")
 	return &q, ch, err
 }
+
 func clientCode(conn *amqp.Connection) {
 	// Create a channel for recieving stock values
 	q, ch, err := setupStockListener(conn)
@@ -277,8 +279,8 @@ func clientCode(conn *amqp.Connection) {
 	failOnError(err, "Failed to register a consumer")
 
 	// Create a channel for requesting stocks
-	neededStocks, err := conn.Channel()
-	neededStocksQ, err := neededStocks.QueueDeclare(
+	//neededStocks, err := conn.Channel()
+	neededStocksQ, err := rabbitChannel.QueueDeclare(
 		"stock_requests", // name
 		false,            // durable
 		false,            // delete when unused
@@ -286,25 +288,12 @@ func clientCode(conn *amqp.Connection) {
 		false,            // no-wait
 		nil,              // arguments
 	)
-	// Example of requesting 10 instances of the stock "S"
-	for i := 0; i < 10; i++ {
+	go pingStocksQueuer(neededStocksQ)
 
-		err = neededStocks.Publish(
-			"",                 // name
-			neededStocksQ.Name, // routing key
-			false,              // mandatory
-			false,              // immediate
-			amqp.Publishing{
-				ContentType: "text/plain",
-				Body:        []byte("S"),
-			})
-		if err != nil {
-			log.Println(err)
-		}
-	}
 	// Print all the stocks we get back
 	go func() {
 		for d := range msgs {
+			// Call function for checking stocks for updates
 			log.Printf(" [x] got %s", d.Body)
 		}
 	}()
@@ -314,6 +303,22 @@ func clientCode(conn *amqp.Connection) {
 	<-forever
 }
 
-// func pingStocksQueuer() {
+func pingStocksQueuer(neededStocksQ amqp.Queue) {
+	for {
+		err := rabbitChannel.Publish(
+			"",                 // name
+			neededStocksQ.Name, // routing key
+			false,              // mandatory
+			false,              // immediate
+			amqp.Publishing{
+				ContentType: "text/plain",
+				Body:        []byte("All"),
+			})
+		if err != nil {
+			log.Println(err)
+		}
 
-// }
+		// Wait a second
+		time.Sleep(time.Second * 1)
+	}
+}

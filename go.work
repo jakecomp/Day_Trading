@@ -4,7 +4,6 @@ use (
 	./backend_api
 	./cli_app
 	./log_service
-	./queue_service
 	./quote_server
 	./worker_service
 )

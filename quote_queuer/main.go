@@ -27,6 +27,8 @@ type Stock struct {
 	Price float64 `json:"price"`
 }
 
+var stock_map map[string]Stock
+
 func dial(url string) (*amqp.Connection, error) {
 	for {
 		conn, err := amqp.Dial(url)
@@ -46,6 +48,21 @@ func failOnError(err error, msg string) {
 func getQuote(stock string) Stock {
 	var stonks Stock
 	rsp, err := http.Get("http://" + quotehost + ":8002")
+	if err != nil {
+		log.Fatal(err)
+	}
+	body, err := ioutil.ReadAll(rsp.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+	json.Unmarshal(body, &stonks)
+	log.Print(stonks)
+	return stonks
+}
+
+func getAllQuotes() map[string]Stock {
+	var stonks map[string]Stock
+	rsp, err := http.Get("http://" + quotehost + ":8002/all")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -110,8 +127,14 @@ func main() {
 	//go clientCode(conn)
 	// Start the goroutine to request stocks
 	for request := range requests {
-		s := getQuote(string(request.Body))
-		log.Println("got result for", s)
+		var s interface{}
+		if string(request.Body) == "All" {
+			s = getAllQuotes()
+			log.Println("got result for", s)
+		} else {
+			s = getQuote(string(request.Body))
+			log.Println("got result for", s)
+		}
 		body, err := json.Marshal(s)
 		if err != nil {
 			log.Println("ERROR:", err)
@@ -128,7 +151,6 @@ func main() {
 			})
 		log.Printf(" [x] Sent %s", string(body))
 	}
-
 }
 
 // ======= From Here On This Can Be Used For Implementing The Trigger Service =====
