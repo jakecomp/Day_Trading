@@ -17,7 +17,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-const DEBUG = true
+const DEBUG = false
 
 type userid string
 type Args []string
@@ -331,7 +331,20 @@ func buyStock(price float64, newMoney Notification, db *mongo.Client, ctx *conte
 	update_db(current_user_doc, db, *ctx)
 	return err
 }
+func lookupPrice(stock string, ticket int64, stockPrices map[string]Stock) Stock {
+	p, ok := stockPrices[stock]
+	// Fallback if we still don't have a stock price
+	if !ok {
+		p = getQuote(stock)
 
+		sendDebugLog(int64(ticket),
+			fmt.Sprint("Had to look up stock manually for",
+				stock, "and got \n",
+				p.Name, "for ", p.Price))
+	}
+	return p
+
+}
 func UserAccountManager(mb *MessageBus) {
 	// users = make(map[userid]*User)
 	add := mb.SubscribeAll(notifyADD)
@@ -341,11 +354,8 @@ func UserAccountManager(mb *MessageBus) {
 	force_sell := mb.SubscribeAll(notifyFORCE_SELL)
 
 	stockPrice := mb.SubscribeAll(notifySTOCK_PRICE)
-
-	// We need a starting price before we can start these operations
-	tprice := <-stockPrice
-
-	price := *tprice.Amount
+	// Map storing all the currently known stock prices
+	stockPrices := make(map[string]Stock)
 
 	db, ctx := connect()
 	defer db.Disconnect(ctx)
@@ -355,21 +365,33 @@ func UserAccountManager(mb *MessageBus) {
 
 		select {
 		case t2price := <-stockPrice:
-			price = *t2price.Amount
+			stockPrices[*t2price.Stock] = Stock{*t2price.Stock, *t2price.Amount}
+			sendDebugLog(int64(t2price.Ticket),
+				fmt.Sprint("Stock price found for\n",
+					*t2price.Stock, "with price\n",
+					*t2price.Amount))
+
 		case newMoney := <-add:
 			err = addMoney(newMoney, db, &ctx)
 			last_ticket = int(newMoney.Ticket)
 		case sale := <-sell:
-			sellStock(price, sale, db, &ctx)
+			p := lookupPrice(*sale.Stock, sale.Ticket, stockPrices)
+			sellStock(p.Price, sale, db, &ctx)
 			last_ticket = int(sale.Ticket)
 		case sale := <-force_sell:
-			sellStock(price, sale, db, &ctx)
+			// Fallback if we still don't have a stock price
+			p := lookupPrice(*sale.Stock, sale.Ticket, stockPrices)
+			sellStock(p.Price, sale, db, &ctx)
 			last_ticket = int(sale.Ticket)
 		case purchase := <-buy:
-			buyStock(price, purchase, db, &ctx)
+			p := lookupPrice(*purchase.Stock, purchase.Ticket, stockPrices)
+			// Fallback if we still don't have a stock prices
+			buyStock(p.Price, purchase, db, &ctx)
 			last_ticket = int(purchase.Ticket)
 		case purchase := <-force_buy:
-			buyStock(price, purchase, db, &ctx)
+			p := lookupPrice(*purchase.Stock, purchase.Ticket, stockPrices)
+			// Fallback if we still don't have a stock price
+			buyStock(p.Price, purchase, db, &ctx)
 			last_ticket = int(purchase.Ticket)
 		}
 		if err != nil {
@@ -411,17 +433,19 @@ func stockMonitor(mb *MessageBus) {
 	monitoredStocks := make(map[string]*string)
 	buy := mb.SubscribeAll(notifyBUY)
 	sell := mb.SubscribeAll(notifySELL)
-	select {
-	case stock := <-sell:
-		if monitoredStocks[*stock.Stock] == nil {
-			monitoredStocks[*stock.Stock] = stock.Stock
-			go monitorStock(*stock.Stock, mb)
-		}
+	for {
+		select {
+		case stock := <-sell:
+			if monitoredStocks[*stock.Stock] == nil {
+				monitoredStocks[*stock.Stock] = stock.Stock
+				go monitorStock(*stock.Stock, mb)
+			}
 
-	case stock := <-buy:
-		if monitoredStocks[*stock.Stock] == nil {
-			monitoredStocks[*stock.Stock] = stock.Stock
-			go monitorStock(*stock.Stock, mb)
+		case stock := <-buy:
+			if monitoredStocks[*stock.Stock] == nil {
+				monitoredStocks[*stock.Stock] = stock.Stock
+				go monitorStock(*stock.Stock, mb)
+			}
 		}
 	}
 

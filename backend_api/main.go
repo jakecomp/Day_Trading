@@ -191,7 +191,7 @@ func socketReader(conn *websocket.Conn) {
 	log.Println("Waiting for messages...")
 	cmd := &command{0, "NONE", []string{"TEST"}}
 	for {
-		messageType, message, err := conn.ReadMessage()
+		_, message, err := conn.ReadMessage()
 		if err != nil {
 			fmt.Println("Error during message reading:", err)
 			break
@@ -230,13 +230,13 @@ func socketReader(conn *websocket.Conn) {
 					StockSymbol:  thisStock.Stock,
 				}
 
-				fmt.Println(log)
+				// fmt.Println(log)
 				log_bytes, err := json.Marshal(log)
 
-				_, err = http.Post("http://10.9.0.9:8004/quotelog", "application/json", bytes.NewBuffer(log_bytes))
-				if err != nil {
-					fmt.Println(err)
-				}
+				go http.Post("http://10.9.0.9:8004/quotelog", "application/json", bytes.NewBuffer(log_bytes))
+				// if err != nil {
+				// 	fmt.Println(err)
+				// }
 			} else {
 				// TODO we need a way to log all quotes
 				resp, err := http.Get("http://10.9.0.6:8002/all")
@@ -270,7 +270,7 @@ func socketReader(conn *websocket.Conn) {
 		}
 
 		// This Should return success or failure eventually
-		err = conn.WriteMessage(messageType, message)
+		// err = conn.WriteMessage(messageType, message)
 		if err != nil {
 			fmt.Println("Error during message writing:", err)
 			break
