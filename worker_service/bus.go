@@ -58,14 +58,14 @@ func (mb *MessageBus) Publish(topic string, message Notification) {
 	mb.lock.Lock()
 	defer mb.lock.Unlock()
 
-	waitChan := make(chan struct{}, MAX_CONCURRENT_JOBS)
+	// waitChan := make(chan struct{}, MAX_CONCURRENT_JOBS)
 
 	for _, ch := range mb.subscriptions[topic] {
 
-		waitChan <- struct{}{}
+		// waitChan <- struct{}{}
 		go func(c chan Notification) {
 			c <- message
-			<-waitChan
+			// <-waitChan
 		}(ch)
 	}
 
