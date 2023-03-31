@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strconv"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -16,15 +17,15 @@ type quote struct {
 	Price float64 `json:"price"`
 }
 
-type command struct {
-	Ticket  int
-	Command string
-	Args    []string
+type Command struct {
+	Ticket  int      `json:"ticket"`
+	Command string   `json:"command"`
+	Args    []string `json:"args"`
 }
 
 type Message struct {
 	Command string
-	Data    *command
+	Data    *Command
 }
 
 type Trigger struct {
@@ -51,28 +52,16 @@ var upgrader = websocket.Upgrader{}
 var rabbitChannel *amqp.Channel
 var queue amqp.Queue
 
-// func handleRequests() {
-// 	//http.HandleFunc("/ws", socketHandler)
-// 	log.Fatal(http.ListenAndServe(":8004", nil))
-// }
-
-// func socketHandler(w http.ResponseWriter, r *http.Request) {
-// 	// Upgrade our raw HTTP connection to a websocket based one
-// 	upgrader.CheckOrigin = func(r *http.Request) bool { return true }
-// 	conn, err := upgrader.Upgrade(w, r, nil)
-// 	if err != nil {
-// 		log.Print("Error during connection upgradation:", err)
-// 		return
-// 	}
-// 	defer conn.Close()
-// 	socketReader(conn)
-// }
-
 func set_ammount(cmd string, user string, stock string, amount float64) {
 	// Make Map Key (Stock, Command)
 	triggerKey := TriggerKey{}
 	triggerKey.Command = cmd
 	triggerKey.Stock = stock
+
+	_, ok := userMap[user]
+	if !ok {
+		userMap[user] = UserTriggers{user, make(map[TriggerKey]Trigger)}
+	}
 
 	// Check if key exists
 	trigger, ok := userMap[user].Triggers[triggerKey]
@@ -93,8 +82,12 @@ func set_trigger(cmd string, user string, stock string, price float64) {
 	// Make Map Key (Stock, Command)
 	triggerKey := TriggerKey{}
 	triggerKey.Command = cmd
-
 	triggerKey.Stock = stock
+
+	_, ok := userMap[user]
+	if !ok {
+		return
+	}
 
 	trigger, ok := userMap[user].Triggers[triggerKey]
 
@@ -106,35 +99,24 @@ func set_trigger(cmd string, user string, stock string, price float64) {
 
 func push_trigger(user_id string, current_price float64, current_triger Trigger, queue_name string) {
 
-	conn, _ := dial("amqp://guest:guest@10.9.0.10:5672/")
-	ch, err := conn.Channel()
-	failOnError(err, "FAILED TO CONNECT TO rabbitMQ")
-
-	q, err_2 := ch.QueueDeclare(
-		queue_name, // Queue name
-		false,      // Durable
-		false,      // Delete when unused
-		false,      // Exclusive
-		false,      // No-wait
-		nil,        // Arguments
-	)
-
-	failOnError(err_2, "FAILED TO DECLARE FORCE BUY / SELL QUEUE")
+	println("TRIGGER EXECUTING!")
 
 	// NEED TO FIGURE OUT HOW TO CREATE COMMAND PROPERLY
 	string_amount := fmt.Sprintf("%f", current_triger.Amount)
 	string_price := fmt.Sprintf("%f", current_price)
-	cmd := &command{0, queue_name, []string{user_id, string_amount, string_price, current_triger.Stock}}
+	cmd := &Command{0, queue_name, []string{user_id, current_triger.Stock, string_amount, string_price}}
+
+	println("Trigger is %s", cmd)
 
 	// CONVERT COMMAND TO BYTES ARRAY
 	command_bytes := new(bytes.Buffer)
 	json.NewEncoder(command_bytes).Encode(cmd)
 
-	err_3 := ch.Publish(
-		"",     // name
-		q.Name, // routing key
-		false,  // mandatory
-		false,  // immediate
+	err_3 := rabbitChannel.Publish(
+		"",       // name
+		"worker", // routing key
+		false,    // mandatory
+		false,    // immediate
 		amqp.Publishing{
 			ContentType: "text/plain",
 			Body:        []byte(command_bytes.Bytes()),
@@ -173,41 +155,12 @@ func check_triggers() {
 
 func delete_key(cmd string, user string, stock string) {
 	triggerKey := TriggerKey{stock, cmd}
-	delete(userMap[user].Triggers, triggerKey)
+	_, ok := userMap[user].Triggers[triggerKey]
+
+	if ok {
+		delete(userMap[user].Triggers, triggerKey)
+	}
 }
-
-// Grab quotes every second and compare to quote values
-// func socketReader(conn *websocket.Conn) {
-// 	// Event Loop, Handle Comms in here
-// 	cmd := &command{0, "NONE", []string{"TEST"}}
-// 	for {
-// 		// Recieve a trigger command
-// 		_, message, err := conn.ReadMessage()
-// 		err = json.Unmarshal(message, cmd)
-// 		if err != nil {
-// 			fmt.Println("Error during message reading:", err)
-// 			break
-// 		}
-
-// 		if cmd.Command == "SET_BUY_AMOUNT" {
-// 			amount, _ := strconv.ParseFloat(cmd.Args[2], 64)
-// 			set_ammount("BUY", cmd.Args[0], cmd.Args[1], amount)
-// 		} else if cmd.Command == "SET_BUY_TRIGGER" {
-// 			price, _ := strconv.ParseFloat(cmd.Args[2], 64)
-// 			set_trigger("BUY", cmd.Args[0], cmd.Args[1], price)
-// 		} else if cmd.Command == "SET_SELL_AMOUNT" {
-// 			amount, _ := strconv.ParseFloat(cmd.Args[2], 64)
-// 			set_ammount("SELL", cmd.Args[0], cmd.Args[1], amount)
-// 		} else if cmd.Command == "SET_SELL_TRIGGER" {
-// 			price, _ := strconv.ParseFloat(cmd.Args[2], 64)
-// 			set_trigger("SELL", cmd.Args[0], cmd.Args[1], price)
-// 		} else if cmd.Command == "CANCEL_SET_BUY" {
-// 			delete_key("BUY", cmd.Args[0], cmd.Args[1])
-// 		} else if cmd.Command == "CANCEL_SET_SELL" {
-// 			delete_key("SELL", cmd.Args[0], cmd.Args[1])
-// 		}
-// 	}
-// }
 
 func failOnError(err error, msg string) {
 	if err != nil {
@@ -221,8 +174,19 @@ func connectQueue(conn *amqp.Connection) (amqp.Queue, *amqp.Channel) {
 	ch, err := conn.Channel()
 	failOnError(err, "Failed to open a channel")
 
-	// Declare a queue
 	q, err := ch.QueueDeclare(
+		"worker", // Queue name
+		false,    // Durable
+		false,    // Delete when unused
+		false,    // Exclusive
+		false,    // No-wait
+		nil,      // Arguments
+	)
+
+	failOnError(err, "FAILED TO DECLARE FORCE BUY / SELL QUEUE")
+
+	// Declare a queue
+	q, err = ch.QueueDeclare(
 		"trigger", // Queue name
 		false,     // Durable
 		false,     // Delete when unused
@@ -279,11 +243,35 @@ func triggerListener(queue amqp.Queue) {
 	)
 	failOnError(err, "Failed to register a consumer")
 
+	cmd := &Command{0, "NONE", []string{"TEST"}}
+
 	go func() {
 		for msg := range msgs {
 			// Call function for checking stocks for updates
+			err = json.Unmarshal(msg.Body, cmd)
+			if err != nil {
+				panic(err)
+			}
 
-			log.Printf("Received a trigger ticket! %s", msg.Body)
+			log.Printf("Received a trigger ticket! %s", cmd.Command)
+
+			if cmd.Command == "SET_BUY_AMOUNT" {
+				amount, _ := strconv.ParseFloat(cmd.Args[2], 64)
+				set_ammount("BUY", cmd.Args[0], cmd.Args[1], amount)
+			} else if cmd.Command == "SET_BUY_TRIGGER" {
+				price, _ := strconv.ParseFloat(cmd.Args[2], 64)
+				set_trigger("BUY", cmd.Args[0], cmd.Args[1], price)
+			} else if cmd.Command == "SET_SELL_AMOUNT" {
+				amount, _ := strconv.ParseFloat(cmd.Args[2], 64)
+				set_ammount("SELL", cmd.Args[0], cmd.Args[1], amount)
+			} else if cmd.Command == "SET_SELL_TRIGGER" {
+				price, _ := strconv.ParseFloat(cmd.Args[2], 64)
+				set_trigger("SELL", cmd.Args[0], cmd.Args[1], price)
+			} else if cmd.Command == "CANCEL_SET_BUY" {
+				delete_key("BUY", cmd.Args[0], cmd.Args[1])
+			} else if cmd.Command == "CANCEL_SET_SELL" {
+				delete_key("SELL", cmd.Args[0], cmd.Args[1])
+			}
 		}
 	}()
 

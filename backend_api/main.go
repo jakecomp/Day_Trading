@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"time"
@@ -365,7 +364,7 @@ func main() {
 	db, ctx = connect()
 	defer db.Disconnect(ctx)
 
-	log.SetOutput(ioutil.Discard)
+	//log.SetOutput(ioutil.Discard)
 
 	stocks = make(map[string]quote)
 
