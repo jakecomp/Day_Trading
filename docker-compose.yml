@@ -8,6 +8,14 @@ services:
       net-10.9.0.0:
         ipv4_address: 10.9.0.3
 
+  cache:
+    image: redis
+    ports:
+      - "6379:6379"
+    networks:
+      net-10.9.0.0:
+        ipv4_address: 10.9.0.7
+
   backend:
     build: ./backend_api
     ports:
@@ -46,7 +54,7 @@ services:
     build: ./worker_service
     ports:
       - "8003:8003"
-    depends_on: [rabbitmq, backend]
+    depends_on: [rabbitmq, backend, cache]
     networks:
       net-10.9.0.0:
         ipv4_address: 10.9.0.8
