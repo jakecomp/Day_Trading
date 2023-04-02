@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-const MAX_CONCURRENT_JOBS = 10
+const MAX_CONCURRENT_JOBS = 300
 
 type Notification struct {
 	Timestamp time.Time
