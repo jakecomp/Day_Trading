@@ -199,12 +199,28 @@ func socketReader(conn *websocket.Conn) {
 			fmt.Println("Error during message reading:", err)
 			break
 		}
-		// fmt.Printf("Received: %s", string(message))
+		// Pass the messages along to the Worker to keep the queue saturated
+		err = queueServiceConn.Publish(
+			"",         // Exchange name
+			queue.Name, // Queue name
+			false,      // Mandatory
+			false,      // Immediate
+			amqp.Publishing{
+				ContentType: "text/json",
+				Body:        message,
+			},
+		)
+		if err != nil {
+			fmt.Println("Error during message writing:", err)
+			break
+		}
 
 		err = json.Unmarshal(message, &cmds)
 		if err != nil {
 			fmt.Println("JSON: ", cmds[0])
 		}
+
+		// Identify the important commands now
 		for _, cmd := range cmds {
 			// Check if should queue item
 			if cmd.Command == "DUMPLOG" {
@@ -238,25 +254,6 @@ func socketReader(conn *websocket.Conn) {
 				go http.Post("http://10.9.0.9:8004/quotelog", "application/json", bytes.NewBuffer(log_bytes))
 			}
 
-		}
-
-		msg, _ := json.Marshal(cmds)
-		err = queueServiceConn.Publish(
-			"",         // Exchange name
-			queue.Name, // Queue name
-			false,      // Mandatory
-			false,      // Immediate
-			amqp.Publishing{
-				ContentType: "text/json",
-				Body:        message,
-			},
-		)
-		log.Printf(" [x] Sent %s", msg)
-		failOnError(err, "Failed to publish a message")
-
-		if err != nil {
-			fmt.Println("Error during message writing:", err)
-			break
 		}
 
 		// This Should return success or failure eventually
