@@ -170,12 +170,12 @@ func dispatch(cmd Command) (CMD, error) {
 }
 
 // TODO avoid this blocking for to avoid unnecssecary blocking on main thread
-func getNextCommand(msgs <-chan amqp.Delivery) (*[]Command, error) {
+func getNextCommand(resp amqp.Delivery) (*[]Command, error) {
 	// Attempt Dequeue
-	resp := <-msgs
+
 	var cmd []Command
 	err := json.Unmarshal(resp.Body, &cmd)
-	log.Println("we got", cmd)
+	// log.Println("we got", cmd)
 	return &cmd, err
 }
 
@@ -605,22 +605,27 @@ func main() {
 		prices: make(map[string]Stock),
 	}
 	for {
-		nextUser, err := getNextCommand(msgs)
-		if err == nil {
-			waitChan <- struct{}{}
-			go func(cmds []Command) {
-				for _, t := range cmds {
-					cmd, err := dispatch(t)
-					if err == nil {
-						// Execute this new command
-						Run(cmd, mb, rdb, db, ctx, stock_pricer)
-					} else {
-						sendErrorLog(int64(t.Ticket), fmt.Sprint("ERROR:", err))
+		select {
+		case next := <-msgs:
+			nextUser, err := getNextCommand(next)
+			if err == nil {
+				waitChan <- struct{}{}
+				go func(cmds []Command) {
+					for _, t := range cmds {
+						cmd, err := dispatch(t)
+						if err == nil {
+							// Execute this new command
+							Run(cmd, mb, rdb, db, ctx, stock_pricer)
+						} else {
+							sendErrorLog(int64(t.Ticket), fmt.Sprint("ERROR:", err))
+						}
 					}
-				}
-				<-waitChan
-			}(*nextUser)
+					<-waitChan
+				}(*nextUser)
 
+			}
+		case <-time.After(time.Second * 5):
+			fmt.Println("5 seconds since last message")
 		}
 
 	}
