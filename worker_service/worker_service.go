@@ -42,7 +42,7 @@ func (i *Notification) MarshalBinary() ([]byte, error) {
 
 func (b *Notification) Pending(client *redis.Client) error {
 	ctx := context.Background()
-	err := client.Set(ctx, b.Userid+"#"+b.Topic, b, 0).Err()
+	err := client.Set(ctx, b.Userid+"#"+b.Topic, b, 60*time.Second).Err()
 	return err
 }
 
