@@ -316,6 +316,9 @@ func sellStock(price float64, newMoney Notification, db *mongo.Client, ctx *cont
 
 	current_user_doc.Balance += float32(*newMoney.Amount)
 	current_user_doc.Stonks[*newMoney.Stock] -= *newMoney.Amount / price
+	if current_user_doc.Stonks[*newMoney.Stock] < 0 {
+		return errors.New(fmt.Sprint("Negative amount of ", *newMoney.Stock, " owned by ", current_user_doc.Username, " is not allowed during sale of ", *newMoney.Stock, " for price ", price))
+	}
 
 	newMoney.Topic = "add"
 	sendAccountLog(&newMoney, current_user_doc.Balance)
