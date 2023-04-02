@@ -383,11 +383,10 @@ type COMMIT_BUY struct {
 
 func (b *COMMIT_BUY) Prerequsite(rdb *redis.Client) error {
 	n, err := lastPending(b.userId, notifyBUY, rdb)
-	if err != nil {
+	if err != nil && err != redis.Nil {
 		log.Println(b, "failed to commit purchase")
 		return err
-	}
-	if n != nil && n.Userid == b.userId && n.Ticket < b.ticket {
+	} else if n != nil && n.Userid == b.userId && n.Ticket < b.ticket {
 		log.Println(b, "commited purchase of ", *b)
 		b.buy = *n
 		return nil
@@ -449,18 +448,16 @@ type CANCEL_BUY struct {
 
 func (b *CANCEL_BUY) Prerequsite(rdb *redis.Client) error {
 	n, err := lastPending(b.userId, notifyBUY, rdb)
-	if err != nil {
+	if err != nil && err != redis.Nil {
 		log.Println(b, "failed to canceled purchase")
 		return err
-	}
-	if n != nil && n.Userid == b.userId && n.Ticket < b.ticket {
+	} else if n != nil && n.Userid == b.userId && n.Ticket < b.ticket {
 		log.Println(b, "canceled the purchase of ", *n)
 		sendDebugLog(b.ticket, fmt.Sprintln("Cancelling purchase of ", *n, " with ", b))
-
 		return nil
 	}
 
-	return errors.New(fmt.Sprintln("No lingering buy found for ", b, "with n ", n))
+	return errors.New(fmt.Sprintln("No lingering buy found for ", b))
 }
 
 func (b CANCEL_BUY) Execute(ch chan *Transaction) error {
@@ -557,17 +554,15 @@ type COMMIT_SELL struct {
 
 func (s *COMMIT_SELL) Prerequsite(rdb *redis.Client) error {
 	n, err := lastPending(s.userId, notifySELL, rdb)
-	if err != nil {
+	if err != nil && err != redis.Nil {
 		return err
-	}
-
-	if n != nil && n.Userid == s.userId && n.Ticket < s.ticket {
+	} else if n != nil && n.Userid == s.userId && n.Ticket < s.ticket {
 		log.Println(s, "commited the sale of ", *n)
 		s.sell = *n
 		return nil
 	}
 
-	return errors.New(fmt.Sprintln("No lingering sells found for ", s, "with n ", n))
+	return errors.New(fmt.Sprintln("No lingering sells found for ", s))
 
 }
 
@@ -622,18 +617,16 @@ type CANCEL_SELL struct {
 
 func (s *CANCEL_SELL) Prerequsite(rdb *redis.Client) error {
 	n, err := lastPending(s.userId, notifySELL, rdb)
-	if err != nil {
+	if err != nil && err != redis.Nil {
 		log.Println(s, "failed to find a sale to cancel")
 		return err
-	}
-	if n != nil && n.Userid == s.userId && n.Ticket < s.ticket {
+	} else if n != nil && n.Userid == s.userId && n.Ticket < s.ticket {
 		log.Println(s, "cancelled the sale of ", *n)
 		s.sell = *n
 		sendDebugLog(s.ticket, fmt.Sprintln("Cancelling sale of ", *n, " with ", s))
 		return nil
 	}
-
-	return errors.New(fmt.Sprintln("No lingering sells found for ", s, "with n ", n))
+	return errors.New(fmt.Sprintln("No lingering sells found for ", s))
 }
 
 func (s CANCEL_SELL) Execute(ch chan *Transaction) error {
