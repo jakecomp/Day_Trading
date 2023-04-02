@@ -61,7 +61,7 @@ func lastPending(userid string, topic string, client *redis.Client) (*Notificati
 
 }
 
-const DEBUG = true
+const DEBUG = false
 
 type userid string
 type Args []string
@@ -543,8 +543,9 @@ func main() {
 	} else {
 		host = "10.9.0.7"
 		fmt.Println("HOST FOR WORKER SET AS " + host)
-		// log.SetOutput(ioutil.Discard)
 	}
+	log.SetOutput(ioutil.Discard)
+
 	// Connect to RabbitMQ server
 	conn, err := dial("amqp://guest:guest@" + rabbitmqHOST + ":5672/")
 	failOnError(err, "Failed to connect to RabbitMQ")
