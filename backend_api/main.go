@@ -199,10 +199,12 @@ func socketReader(conn *websocket.Conn) {
 			fmt.Println("Error during message reading:", err)
 			break
 		}
-		fmt.Printf("Received: %s", string(message))
+		// fmt.Printf("Received: %s", string(message))
 
-		err = json.Unmarshal(message, cmds)
-		fmt.Println("JSON: ", cmds)
+		err = json.Unmarshal(message, &cmds)
+		if err != nil {
+			fmt.Println("JSON: ", cmds[0])
+		}
 		for _, cmd := range cmds {
 			// Check if should queue item
 			if cmd.Command == "DUMPLOG" {
