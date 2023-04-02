@@ -282,8 +282,9 @@ func (a ADD) Notify() Notification {
 // lookup user balance
 // if invalid balance return an error describing this
 func (a ADD) Prerequsite(rdb *redis.Client) error {
-	ctx := context.Background()
-	rdb.Set(ctx, a.userId+"#"+notifyADD, a.amount, 0)
+	if a.amount < 0 {
+		return errors.New(fmt.Sprint("Attempt to add negative value ", a.amount, " to user ", a.userId))
+	}
 	return nil
 }
 func (a ADD) Execute(ch chan *Transaction) error {
