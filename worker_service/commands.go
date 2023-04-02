@@ -67,20 +67,6 @@ type CMD interface {
 	// Postrequsite(*MessageBus) error
 }
 
-// buy sell , commit/cancel ->  split per user
-
-//	func taskRunner(m *MessageBus, singleThreadedCommands chan CMD, rdb *redis.Client, waitChan chan struct{}) {
-//		for task := range singleThreadedCommands {
-//		}
-//	}
-func knownUser(userid string, rdb *redis.Client) bool {
-	ctx := context.Background()
-	if err := rdb.GetSet(ctx, userid+"#"+"created", "1").Err(); err != nil {
-		return false
-	}
-	return true
-}
-
 type StockPricer struct {
 	prices map[string]Stock
 	lock   sync.RWMutex
@@ -110,7 +96,7 @@ func (s *StockPricer) lookupPrice(stock string, ticket int64) Stock {
 
 }
 
-func UserAccountManager2(mb *MessageBus, notification Notification, db *mongo.Client, ctx context.Context, s *StockPricer) {
+func UserAccountManager(mb *MessageBus, notification Notification, db *mongo.Client, ctx context.Context, s *StockPricer) {
 	// Map storing all the currently known stock prices
 	var err error
 	last_ticket := -1
@@ -153,10 +139,6 @@ func UserAccountManager2(mb *MessageBus, notification Notification, db *mongo.Cl
 // last active timestamp
 func Run(task CMD, m *MessageBus, rdb *redis.Client, db *mongo.Client, ctx context.Context, s *StockPricer) {
 	log.Println("Executing prereq for ", reflect.TypeOf(task), task)
-	// Logs all transactions to user accounts
-	// if !knownUser(task.UserId(), rdb) {
-	// 	log.Println("New worker created for ", task.UserId(), task.Notify().Ticket)
-	// }
 	err := task.Prerequsite(rdb)
 	if err != nil {
 		sendErrorLog(int64(task.Notify().Ticket), fmt.Sprint("ERROR:", err))
@@ -166,15 +148,10 @@ func Run(task CMD, m *MessageBus, rdb *redis.Client, db *mongo.Client, ctx conte
 	log.Println("Sending notification for ", reflect.TypeOf(task), task)
 
 	n := task.Notify()
+	UserAccountManager(m, n, db, ctx, s)
 	m.Publish(n.Topic, n)
-	UserAccountManager2(m, n, db, ctx, s)
 
 }
-
-// TODO https://www.rabbitmq.com/tutorials/tutorial-five-go.html
-// Use Topics
-// create workers as needed all with access to a users queue
-// create workers as needed all with access to a users queue
 
 const (
 	notifyADD         = "ADD"

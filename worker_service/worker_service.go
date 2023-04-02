@@ -379,74 +379,8 @@ func buyStock(price float64, newMoney Notification, db *mongo.Client, ctx *conte
 	update_db(current_user_doc, db, *ctx)
 	return err
 }
-func lookupPrice(stock string, ticket int64, stockPrices *map[string]Stock) Stock {
-	p, ok := (*stockPrices)[stock]
-	// Fallback if we still don't have a stock price
-	if !ok {
-		p = getQuote(stock)
-		(*stockPrices)[stock] = p
-		sendDebugLog(int64(ticket),
-			fmt.Sprint("Had to look up stock manually for",
-				stock, "and got \n",
-				p.Name, "for ", p.Price))
-	}
-	return p
-
-}
 
 // we return a function so that we can block during the subscribing process
-func UserAccountManager(mb *MessageBus, uid userid) func(chan struct{}) {
-	add := mb.Subscribe(notifyADD, uid)
-	buy := mb.Subscribe(notifyCOMMIT_BUY, uid)
-	sell := mb.Subscribe(notifyCOMMIT_SELL, uid)
-	force_buy := mb.Subscribe(notifyFORCE_BUY, uid)
-	force_sell := mb.Subscribe(notifyFORCE_SELL, uid)
-	stockPrice := mb.Subscribe(notifySTOCK_PRICE, uid)
-	// Map storing all the currently known stock prices
-	return func(waitChan chan struct{}) {
-		waitChan <- struct{}{}
-		stockPrices := make(map[string]Stock)
-		db, ctx := connect()
-		defer db.Disconnect(ctx)
-		var err error
-		for {
-			last_ticket := -1
-			select {
-			case t2price := <-stockPrice:
-				stockPrices[*t2price.Stock] = Stock{*t2price.Stock, *t2price.Amount}
-			case newMoney := <-add:
-				err = addMoney(newMoney, db, &ctx)
-				last_ticket = int(newMoney.Ticket)
-			case sale := <-sell:
-				p := lookupPrice(*sale.Stock, sale.Ticket, &stockPrices)
-				err = sellStock(p.Price, sale, db, &ctx)
-				last_ticket = int(sale.Ticket)
-			case purchase := <-buy:
-				p := lookupPrice(*purchase.Stock, purchase.Ticket, &stockPrices)
-				// Fallback if we still don't have a stock prices
-				err = buyStock(p.Price, purchase, db, &ctx)
-				last_ticket = int(purchase.Ticket)
-			case sale := <-force_sell:
-				// Fallback if we still don't have a stock price
-				p := lookupPrice(*sale.Stock, sale.Ticket, &stockPrices)
-				err = sellStock(p.Price, sale, db, &ctx)
-				last_ticket = int(sale.Ticket)
-			case purchase := <-force_buy:
-				p := lookupPrice(*purchase.Stock, purchase.Ticket, &stockPrices)
-				// Fallback if we still don't have a stock price
-				err = buyStock(p.Price, purchase, db, &ctx)
-				last_ticket = int(purchase.Ticket)
-			default:
-
-			}
-			if err != nil {
-				sendErrorLog(int64(last_ticket), fmt.Sprint("ERROR:", err))
-			}
-			<-waitChan
-		}
-	}
-}
-
 func getQuote(stock string) Stock {
 	var stonks Stock
 	rsp, err := http.Get("http://" + quoteHOST + ":8002/" + stock)
