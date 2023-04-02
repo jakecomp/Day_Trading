@@ -18,6 +18,8 @@ import (
 )
 
 const (
+	DEBUG = true
+
 	MAX_CONCURRENT_JOBS = 300
 	redisHOST           = "10.9.0.7"
 	rabbitmqHOST        = "10.9.0.10"
@@ -57,8 +59,6 @@ func lastPending(userid string, topic string, client *redis.Client) (*Notificati
 	return &n, err
 
 }
-
-const DEBUG = false
 
 type userid string
 type Args []string
