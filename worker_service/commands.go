@@ -83,19 +83,24 @@ func knownUser(userid string, rdb *redis.Client) bool {
 
 type StockPricer struct {
 	prices map[string]Stock
-	lock   sync.Mutex
+	lock   sync.RWMutex
 }
 
 func (s *StockPricer) lookupPrice(stock string, ticket int64) Stock {
+	// We use RLock here to allow for concurrent reads so long as
+	// Lock has not been used. This prevents reading during writs
+	s.lock.RLock()
 	p, ok := s.prices[stock]
+	s.lock.RUnlock()
+
 	// Fallback if we still don't have a stock price
 	if !ok {
 		p = getQuote(stock)
-		{
-			s.lock.Lock()
-			defer s.lock.Unlock()
-			s.prices[stock] = p
-		}
+
+		s.lock.Lock()
+		s.prices[stock] = p
+		s.lock.Unlock()
+
 		sendDebugLog(int64(ticket),
 			fmt.Sprint("Had to look up stock manually for",
 				stock, "and got \n",
