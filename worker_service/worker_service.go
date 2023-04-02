@@ -500,18 +500,6 @@ func stockMonitor(mb *MessageBus) {
 
 }
 
-func stockPrinter(mb *MessageBus) {
-	prices := mb.SubscribeAll(notifySTOCK_PRICE)
-	for {
-		price := <-prices
-		log.Println("Stock price of ", *price.Stock, " is ", Stock{
-			Name:  *price.Stock,
-			Price: *price.Amount,
-		})
-	}
-
-}
-
 func failOnError(err error, msg string) {
 	if err != nil {
 		log.Fatalf("%s: %s", msg, err)
