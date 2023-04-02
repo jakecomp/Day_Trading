@@ -17,15 +17,12 @@ import (
 	"time"
 )
 
-func pendingPurchaseCacher(mb *MessageBus, rdb *redis.Client) {
-	// TODO cancel purchases
-}
-
 const (
-	redisHOST    = "10.9.0.7"
-	rabbitmqHOST = "10.9.0.10"
-	quoteHOST    = "10.9.0.6"
-	logHOST      = "10.9.0.9"
+	MAX_CONCURRENT_JOBS = 300
+	redisHOST           = "10.9.0.7"
+	rabbitmqHOST        = "10.9.0.10"
+	quoteHOST           = "10.9.0.6"
+	logHOST             = "10.9.0.9"
 )
 
 func setupRedis() *redis.Client {
