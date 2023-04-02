@@ -330,6 +330,9 @@ type BUY struct {
 // lookup user balance
 // if invalid balance return an error describing this
 func (b BUY) Prerequsite(rdb *redis.Client) error {
+	if b.amount < 0 {
+		return errors.New(fmt.Sprint("Attempt to buy a negative amount of ", b.stock, " that amount being ", b.amount, " for user ", b.userId))
+	}
 	n := b.Notify()
 	n.Pending(rdb)
 	log.Println("set pending buy for ", b)
@@ -504,6 +507,9 @@ type SELL struct {
 }
 
 func (s SELL) Prerequsite(rdb *redis.Client) error {
+	if s.amount < 0 {
+		return errors.New(fmt.Sprint("Attempt to sell a negative amount of ", s.stock, " that amount being ", s.amount, " for user ", s.userId))
+	}
 	n := s.Notify()
 	n.Pending(rdb)
 	log.Println("set pending sell for ", s)
