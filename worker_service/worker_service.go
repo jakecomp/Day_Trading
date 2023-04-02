@@ -170,14 +170,13 @@ func dispatch(cmd Command) (CMD, error) {
 }
 
 // TODO avoid this blocking for to avoid unnecssecary blocking on main thread
-func getNextCommand(msgs <-chan amqp.Delivery) (*Command, error) {
-	for {
-		// Attempt Dequeue
-		resp := <-msgs
-		var cmd Command
-		err := json.Unmarshal(resp.Body, &cmd)
-		return &cmd, err
-	}
+func getNextCommand(msgs <-chan amqp.Delivery) (*[]Command, error) {
+	// Attempt Dequeue
+	resp := <-msgs
+	var cmd []Command
+	err := json.Unmarshal(resp.Body, &cmd)
+	log.Println("we got", cmd)
+	return &cmd, err
 }
 
 // Used for logging anything related to a users account
@@ -194,7 +193,7 @@ func sendAccountLog(n *Notification, bal float32) {
 	bodyReader := bytes.NewReader(ulog)
 	_, err := http.Post("http://"+logHOST+":8004/accountlog", "application/json", bodyReader)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 }
 
@@ -220,7 +219,7 @@ func sendUserLog(n Notification) {
 	bodyReader := bytes.NewReader(ulog)
 	_, err := http.Post("http://"+logHOST+":8004/userlog", "application/json", bodyReader)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 }
 
@@ -233,7 +232,7 @@ func sendErrorLog(ticket int64, msg string) {
 	bodyReader := bytes.NewReader(ulog)
 	_, err := http.Post("http://"+logHOST+":8004/errorlog", "application/json", bodyReader)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 }
 
@@ -248,7 +247,7 @@ func sendDebugLog(ticket int64, msg string) {
 		log.Println(string(ulog))
 		_, err := http.Post("http://"+logHOST+":8004/debuglog", "application/json", bodyReader)
 		if err != nil {
-			log.Fatal(err)
+			log.Println(err)
 		}
 
 	}
@@ -583,7 +582,7 @@ func main() {
 	mb := NewMessageBus()
 
 	// Monitor the current stock value
-	go stockMonitor(mb)
+	// go stockMonitor(mb)
 	// Log the new command
 	notes := []string{
 		notifyADD,
@@ -597,7 +596,6 @@ func main() {
 	nch := make(chan Notification)
 	go commandLogger(nch)
 
-	waitChan := make(chan struct{}, MAX_CONCURRENT_JOBS)
 	for _, n := range notes {
 		val := n
 		c := mb.SubscribeAll(val)
@@ -610,21 +608,31 @@ func main() {
 		}()
 	}
 
-	taskChan := make(chan CMD, MAX_CONCURRENT_JOBS)
-	go taskRunner(mb, taskChan, rdb, waitChan)
-	for {
-		select {
-		default:
-			t, err := getNextCommand(msgs)
-			cmd, err := dispatch(*t)
+	waitChan := make(chan struct{}, MAX_CONCURRENT_JOBS)
+	// taskChan := make(chan CMD, MAX_CONCURRENT_JOBS)
 
-			if err == nil {
-				// waitChan <- struct{}{}
-				// Execute this new command
-				Run(cmd, mb, rdb, taskChan)
-			} else {
-				sendErrorLog(int64(t.Ticket), fmt.Sprint("ERROR:", err))
-			}
+	db, ctx := connect()
+	defer db.Disconnect(ctx)
+	stock_pricer := &StockPricer{
+		prices: make(map[string]Stock),
+	}
+	for {
+		nextUser, err := getNextCommand(msgs)
+		if err == nil {
+			waitChan <- struct{}{}
+			go func(cmds []Command) {
+				for _, t := range cmds {
+					cmd, err := dispatch(t)
+					if err == nil {
+						// Execute this new command
+						Run(cmd, mb, rdb, db, ctx, stock_pricer)
+					} else {
+						sendErrorLog(int64(t.Ticket), fmt.Sprint("ERROR:", err))
+					}
+				}
+				<-waitChan
+			}(*nextUser)
+
 		}
 
 	}

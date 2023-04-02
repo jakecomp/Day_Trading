@@ -46,9 +46,11 @@ func parseCmd(line string) (*Command, error) {
 	return &Command{Ticket: ticketnum, Command: parts[0], Args: parts[1:]}, nil
 }
 
-func parseCmds(r *bufio.Reader) chan Command {
-	c := make(chan Command, 500)
+func parseCmds(r *bufio.Reader) chan []Command {
+	c := make(chan []Command, 500)
+	usercmds := make(map[string][]Command, 1000)
 	go func() {
+
 		for l, _, err := r.ReadLine(); err == nil; l, _, err = r.ReadLine() {
 			if err != nil {
 				fmt.Fprintln(os.Stderr, "Error reading input:", err)
@@ -59,7 +61,10 @@ func parseCmds(r *bufio.Reader) chan Command {
 			if err != nil {
 				fmt.Fprintln(os.Stderr, "Error parsing input:", err)
 			}
-			c <- *cmd
+			usercmds[cmd.Args[0]] = append(usercmds[cmd.Args[0]], *cmd)
+		}
+		for _, value := range usercmds {
+			c <- value
 		}
 		close(c)
 	}()
@@ -125,21 +130,23 @@ func connectToSocket(tok token) *websocket.Conn {
 	return c
 }
 
-func forwardCommands(cmds chan Command, c *websocket.Conn) {
-	for cmd := range cmds {
-		jcmd, err := json.Marshal(cmd)
+func forwardCommands(cmdsPerUser chan []Command, c *websocket.Conn) {
+	for cmds := range cmdsPerUser {
+		jcmd, err := json.Marshal(cmds)
 		if err != nil {
 			log.Println("failed during command marshelling ", err)
 		}
+		// log.Println(cmds)
 		err = c.WriteMessage(websocket.TextMessage, jcmd)
 		// mType, m, err := c.ReadMessage()
 		if err != nil {
-			log.Fatal("error on read message: ", err, cmd)
+			fmt.Println("error on read message: ", err, cmds)
 		}
 		// if mType == websocket.TextMessage {
 		// 	log.Println(string(m))
 		// }
 	}
+	c.Close()
 
 }
 

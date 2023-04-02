@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+	"sync"
 	"time"
 
 	redis "github.com/redis/go-redis/v9"
@@ -68,21 +69,10 @@ type CMD interface {
 
 // buy sell , commit/cancel ->  split per user
 
-func taskRunner(m *MessageBus, singleThreadedCommands chan CMD, rdb *redis.Client, waitChan chan struct{}) {
-	for task := range singleThreadedCommands {
-		waitChan <- struct{}{}
-		err := task.Prerequsite(rdb)
-		if err != nil {
-			sendErrorLog(int64(task.Notify().Ticket), fmt.Sprint("ERROR:", err))
-			continue
-		}
-		log.Println("Executed ", reflect.TypeOf(task), task)
-		log.Println("Sending notification for ", reflect.TypeOf(task), task)
-
-		n := task.Notify()
-		m.Publish(n.Topic, n)
-	}
-}
+//	func taskRunner(m *MessageBus, singleThreadedCommands chan CMD, rdb *redis.Client, waitChan chan struct{}) {
+//		for task := range singleThreadedCommands {
+//		}
+//	}
 func knownUser(userid string, rdb *redis.Client) bool {
 	ctx := context.Background()
 	if err := rdb.GetSet(ctx, userid+"#"+"created", "1").Err(); err != nil {
@@ -91,17 +81,88 @@ func knownUser(userid string, rdb *redis.Client) bool {
 	return true
 }
 
+type StockPricer struct {
+	prices map[string]Stock
+	lock   sync.Mutex
+}
+
+func (s *StockPricer) lookupPrice(stock string, ticket int64) Stock {
+	p, ok := s.prices[stock]
+	// Fallback if we still don't have a stock price
+	if !ok {
+		p = getQuote(stock)
+		{
+			s.lock.Lock()
+			defer s.lock.Unlock()
+			s.prices[stock] = p
+		}
+		sendDebugLog(int64(ticket),
+			fmt.Sprint("Had to look up stock manually for",
+				stock, "and got \n",
+				p.Name, "for ", p.Price))
+	}
+	return p
+
+}
+
+func UserAccountManager2(mb *MessageBus, notification Notification, db *mongo.Client, ctx context.Context, s *StockPricer) {
+	// Map storing all the currently known stock prices
+	var err error
+	last_ticket := -1
+	switch notification.Topic {
+	// case t2price := <-stockPrice:
+	// 	stockPrices[*t2price.Stock] = Stock{*t2price.Stock, *t2price.Amount}
+	case notifyADD:
+		err = addMoney(notification, db, &ctx)
+		last_ticket = int(notification.Ticket)
+	case notifyCOMMIT_SELL:
+		p := s.lookupPrice(*notification.Stock, notification.Ticket)
+		err = sellStock(p.Price, notification, db, &ctx)
+		last_ticket = int(notification.Ticket)
+	case notifyCOMMIT_BUY:
+		p := s.lookupPrice(*notification.Stock, notification.Ticket)
+		// Fallback if we still don't have a stock prices
+		err = buyStock(p.Price, notification, db, &ctx)
+		last_ticket = int(notification.Ticket)
+	case notifyFORCE_SELL:
+		// Fallback if we still don't have a stock price
+		p := s.lookupPrice(*notification.Stock, notification.Ticket)
+		err = sellStock(p.Price, notification, db, &ctx)
+		last_ticket = int(notification.Ticket)
+	case notifyFORCE_BUY:
+		p := s.lookupPrice(*notification.Stock, notification.Ticket)
+		// Fallback if we still don't have a stock price
+		err = buyStock(p.Price, notification, db, &ctx)
+		last_ticket = int(notification.Ticket)
+		// default:
+
+	}
+
+	if err != nil {
+		sendErrorLog(int64(last_ticket), fmt.Sprint("ERROR:", err))
+	}
+}
+
 // timout for a user
 // perticket
 // last active timestamp
-func Run(c CMD, m *MessageBus, rdb *redis.Client, taskChan chan CMD) {
-	log.Println("Executing prereq for ", reflect.TypeOf(c), c)
+func Run(task CMD, m *MessageBus, rdb *redis.Client, db *mongo.Client, ctx context.Context, s *StockPricer) {
+	log.Println("Executing prereq for ", reflect.TypeOf(task), task)
 	// Logs all transactions to user accounts
-	if !knownUser(c.UserId(), rdb) {
-		// w := UserAccountManager(m, userid(c.UserId()))
-		log.Println("New worker created for ", c.UserId(), c.Notify().Ticket)
+	// if !knownUser(task.UserId(), rdb) {
+	// 	log.Println("New worker created for ", task.UserId(), task.Notify().Ticket)
+	// }
+	err := task.Prerequsite(rdb)
+	if err != nil {
+		sendErrorLog(int64(task.Notify().Ticket), fmt.Sprint("ERROR:", err))
+		return
 	}
-	taskChan <- c
+	log.Println("Executed ", reflect.TypeOf(task), task)
+	log.Println("Sending notification for ", reflect.TypeOf(task), task)
+
+	n := task.Notify()
+	m.Publish(n.Topic, n)
+	UserAccountManager2(m, n, db, ctx, s)
 
 }
 
@@ -573,7 +634,7 @@ type CANCEL_SELL struct {
 func (s *CANCEL_SELL) Prerequsite(rdb *redis.Client) error {
 	n, err := lastPending(s.userId, notifySELL, rdb)
 	if err != nil {
-		log.Println(s, "failed to find a sale to cancel", *n)
+		log.Println(s, "failed to find a sale to cancel")
 		return err
 	}
 	if n != nil && n.Userid == s.userId && n.Ticket < s.ticket {
