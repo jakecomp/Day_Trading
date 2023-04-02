@@ -5,8 +5,6 @@ import (
 	"time"
 )
 
-const MAX_CONCURRENT_JOBS = 300
-
 type Notification struct {
 	Timestamp time.Time
 	Topic     string
@@ -58,14 +56,10 @@ func (mb *MessageBus) Publish(topic string, message Notification) {
 	mb.lock.Lock()
 	defer mb.lock.Unlock()
 
-	waitChan := make(chan struct{}, MAX_CONCURRENT_JOBS)
-
 	for _, ch := range mb.subscriptions[topic] {
 
-		waitChan <- struct{}{}
 		go func(c chan Notification) {
 			c <- message
-			<-waitChan
 		}(ch)
 	}
 

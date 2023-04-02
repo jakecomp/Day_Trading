@@ -6,18 +6,59 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	redis "github.com/redis/go-redis/v9"
+	"github.com/streadway/amqp"
+	"go.mongodb.org/mongo-driver/mongo"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
 	"time"
-
-	"github.com/streadway/amqp"
-	"go.mongodb.org/mongo-driver/mongo"
 )
 
-const DEBUG = false
+const (
+	DEBUG = true
+
+	MAX_CONCURRENT_JOBS = 300
+	redisHOST           = "10.9.0.7"
+	rabbitmqHOST        = "10.9.0.10"
+	quoteHOST           = "10.9.0.6"
+	logHOST             = "10.9.0.9"
+)
+
+func setupRedis() *redis.Client {
+	client := redis.NewClient(&redis.Options{
+		DB:       0,
+		Password: "",
+		Addr:     redisHOST + ":6379",
+	})
+	return client
+}
+
+func (i *Notification) MarshalBinary() ([]byte, error) {
+	return json.Marshal(i)
+}
+
+func (b *Notification) Pending(client *redis.Client) error {
+	ctx := context.Background()
+	err := client.Set(ctx, b.Userid+"#"+b.Topic, b, 60*time.Second).Err()
+	return err
+}
+
+func lastPending(userid string, topic string, client *redis.Client) (*Notification, error) {
+
+	ctx := context.Background()
+	val, err := client.GetDel(ctx, userid+"#"+topic).Bytes()
+	if err != nil {
+		return nil, err
+	}
+
+	var n Notification
+	err = json.Unmarshal(val, &n)
+	return &n, err
+
+}
 
 type userid string
 type Args []string
@@ -78,7 +119,7 @@ func NewUser() *User {
 	}
 }
 
-// // Internal DB of user state
+// Internal DB of user state
 // var users map[userid]*User
 
 // Dispatch commands based on the command string given
@@ -126,15 +167,13 @@ func dispatch(cmd Command) (CMD, error) {
 }
 
 // TODO avoid this blocking for to avoid unnecssecary blocking on main thread
-func getNextCommand(msgs <-chan amqp.Delivery) (*Command, error) {
-	for {
-		// Attempt Dequeue
-		resp := <-msgs
-		var cmd Command
-		err := json.Unmarshal(resp.Body, &cmd)
-		return &cmd, err
-	}
+func getNextCommand(resp amqp.Delivery) (*[]Command, error) {
+	// Attempt Dequeue
 
+	var cmd []Command
+	err := json.Unmarshal(resp.Body, &cmd)
+	// log.Println("we got", cmd)
+	return &cmd, err
 }
 
 // Used for logging anything related to a users account
@@ -149,9 +188,9 @@ func sendAccountLog(n *Notification, bal float32) {
 
 	ulog, _ := json.Marshal(a)
 	bodyReader := bytes.NewReader(ulog)
-	_, err := http.Post("http://10.9.0.9:8004/accountlog", "application/json", bodyReader)
+	_, err := http.Post("http://"+logHOST+":8004/accountlog", "application/json", bodyReader)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 }
 
@@ -175,9 +214,9 @@ func sendUserLog(n Notification) {
 	}
 	ulog, _ := json.Marshal(u)
 	bodyReader := bytes.NewReader(ulog)
-	_, err := http.Post("http://10.9.0.9:8004/userlog", "application/json", bodyReader)
+	_, err := http.Post("http://"+logHOST+":8004/userlog", "application/json", bodyReader)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 }
 
@@ -188,9 +227,9 @@ func sendErrorLog(ticket int64, msg string) {
 		DebugMessage: msg,
 	})
 	bodyReader := bytes.NewReader(ulog)
-	_, err := http.Post("http://10.9.0.9:8004/errorlog", "application/json", bodyReader)
+	_, err := http.Post("http://"+logHOST+":8004/errorlog", "application/json", bodyReader)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 }
 
@@ -202,9 +241,10 @@ func sendDebugLog(ticket int64, msg string) {
 			DebugMessage: msg,
 		})
 		bodyReader := bytes.NewReader(ulog)
-		_, err := http.Post("http://10.9.0.9:8004/debuglog", "application/json", bodyReader)
+		log.Println(string(ulog))
+		_, err := http.Post("http://"+logHOST+":8004/debuglog", "application/json", bodyReader)
 		if err != nil {
-			log.Fatal(err)
+			log.Println(err)
 		}
 
 	}
@@ -250,6 +290,7 @@ func addMoney(newMoney Notification, db *mongo.Client, ctx *context.Context) err
 	update_db(current_user_doc, db, *ctx)
 	return err
 }
+
 func sellStock(price float64, newMoney Notification, db *mongo.Client, ctx *context.Context) error {
 	uid := userid(newMoney.Userid)
 
@@ -275,6 +316,9 @@ func sellStock(price float64, newMoney Notification, db *mongo.Client, ctx *cont
 
 	current_user_doc.Balance += float32(*newMoney.Amount)
 	current_user_doc.Stonks[*newMoney.Stock] -= *newMoney.Amount / price
+	if current_user_doc.Stonks[*newMoney.Stock] < 0 {
+		return errors.New(fmt.Sprint("Negative amount of ", *newMoney.Stock, " owned by ", current_user_doc.Username, " is not allowed during sale of ", *newMoney.Stock, " for price ", price))
+	}
 
 	newMoney.Topic = "add"
 	sendAccountLog(&newMoney, current_user_doc.Balance)
@@ -285,6 +329,10 @@ func sellStock(price float64, newMoney Notification, db *mongo.Client, ctx *cont
 
 	update_db(current_user_doc, db, *ctx)
 	return nil
+}
+
+func lookupUser(uid userid, db *mongo.Client, ctx *context.Context) (*user_doc, error) {
+	return read_db(string(uid), false, db, *ctx)
 }
 func buyStock(price float64, newMoney Notification, db *mongo.Client, ctx *context.Context) error {
 	uid := userid(newMoney.Userid)
@@ -331,78 +379,11 @@ func buyStock(price float64, newMoney Notification, db *mongo.Client, ctx *conte
 	update_db(current_user_doc, db, *ctx)
 	return err
 }
-func lookupPrice(stock string, ticket int64, stockPrices map[string]Stock) Stock {
-	p, ok := stockPrices[stock]
-	// Fallback if we still don't have a stock price
-	if !ok {
-		p = getQuote(stock)
 
-		sendDebugLog(int64(ticket),
-			fmt.Sprint("Had to look up stock manually for",
-				stock, "and got \n",
-				p.Name, "for ", p.Price))
-	}
-	return p
-
-}
-func UserAccountManager(mb *MessageBus) {
-	// users = make(map[userid]*User)
-	add := mb.SubscribeAll(notifyADD)
-	buy := mb.SubscribeAll(notifyCOMMIT_BUY)
-	sell := mb.SubscribeAll(notifyCOMMIT_SELL)
-	force_buy := mb.SubscribeAll(notifyFORCE_BUY)
-	force_sell := mb.SubscribeAll(notifyFORCE_SELL)
-
-	stockPrice := mb.SubscribeAll(notifySTOCK_PRICE)
-	// Map storing all the currently known stock prices
-	stockPrices := make(map[string]Stock)
-
-	db, ctx := connect()
-	defer db.Disconnect(ctx)
-	var err error
-	for {
-		last_ticket := -1
-
-		select {
-		case t2price := <-stockPrice:
-			stockPrices[*t2price.Stock] = Stock{*t2price.Stock, *t2price.Amount}
-			sendDebugLog(int64(t2price.Ticket),
-				fmt.Sprint("Stock price found for\n",
-					*t2price.Stock, "with price\n",
-					*t2price.Amount))
-
-		case newMoney := <-add:
-			err = addMoney(newMoney, db, &ctx)
-			last_ticket = int(newMoney.Ticket)
-		case sale := <-sell:
-			p := lookupPrice(*sale.Stock, sale.Ticket, stockPrices)
-			sellStock(p.Price, sale, db, &ctx)
-			last_ticket = int(sale.Ticket)
-		case sale := <-force_sell:
-			// Fallback if we still don't have a stock price
-			p := lookupPrice(*sale.Stock, sale.Ticket, stockPrices)
-			sellStock(p.Price, sale, db, &ctx)
-			last_ticket = int(sale.Ticket)
-		case purchase := <-buy:
-			p := lookupPrice(*purchase.Stock, purchase.Ticket, stockPrices)
-			// Fallback if we still don't have a stock prices
-			buyStock(p.Price, purchase, db, &ctx)
-			last_ticket = int(purchase.Ticket)
-		case purchase := <-force_buy:
-			p := lookupPrice(*purchase.Stock, purchase.Ticket, stockPrices)
-			// Fallback if we still don't have a stock price
-			buyStock(p.Price, purchase, db, &ctx)
-			last_ticket = int(purchase.Ticket)
-		}
-		if err != nil {
-			sendErrorLog(int64(last_ticket), fmt.Sprint("ERROR:", err))
-		}
-	}
-}
-
+// we return a function so that we can block during the subscribing process
 func getQuote(stock string) Stock {
 	var stonks Stock
-	rsp, err := http.Get("http://10.9.0.6:8002/" + stock)
+	rsp, err := http.Get("http://" + quoteHOST + ":8002/" + stock)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -411,7 +392,6 @@ func getQuote(stock string) Stock {
 		log.Fatal(err)
 	}
 	json.Unmarshal(body, &stonks)
-	log.Print(stonks)
 	return stonks
 }
 
@@ -429,6 +409,7 @@ func monitorStock(stockName string, mb *MessageBus) {
 		time.Sleep(time.Millisecond * 1000)
 	}
 }
+
 func stockMonitor(mb *MessageBus) {
 	monitoredStocks := make(map[string]*string)
 	buy := mb.SubscribeAll(notifyBUY)
@@ -436,29 +417,19 @@ func stockMonitor(mb *MessageBus) {
 	for {
 		select {
 		case stock := <-sell:
-			if monitoredStocks[*stock.Stock] == nil {
-				monitoredStocks[*stock.Stock] = stock.Stock
-				go monitorStock(*stock.Stock, mb)
+			s := stock
+			if monitoredStocks[*s.Stock] == nil {
+				monitoredStocks[*s.Stock] = s.Stock
+				go monitorStock(*s.Stock, mb)
 			}
 
 		case stock := <-buy:
-			if monitoredStocks[*stock.Stock] == nil {
-				monitoredStocks[*stock.Stock] = stock.Stock
-				go monitorStock(*stock.Stock, mb)
+			s := stock
+			if monitoredStocks[*s.Stock] == nil {
+				monitoredStocks[*s.Stock] = s.Stock
+				go monitorStock(*s.Stock, mb)
 			}
 		}
-	}
-
-}
-
-func stockPrinter(mb *MessageBus) {
-	prices := mb.SubscribeAll(notifySTOCK_PRICE)
-	for {
-		price := <-prices
-		log.Println("Stock price of ", *price.Stock, " is ", Stock{
-			Name:  *price.Stock,
-			Price: *price.Amount,
-		})
 	}
 
 }
@@ -506,15 +477,17 @@ func main() {
 	} else {
 		host = "10.9.0.7"
 		fmt.Println("HOST FOR WORKER SET AS " + host)
-		log.SetOutput(ioutil.Discard)
 	}
+	log.SetOutput(ioutil.Discard)
+
 	// Connect to RabbitMQ server
-	conn, err := dial("amqp://guest:guest@10.9.0.10:5672/")
+	conn, err := dial("amqp://guest:guest@" + rabbitmqHOST + ":5672/")
 	failOnError(err, "Failed to connect to RabbitMQ")
 	defer conn.Close()
-
 	q, ch := setupListeners(conn)
 	defer ch.Close()
+	rdb := setupRedis()
+	defer rdb.Close()
 
 	// Consume messages from the queue
 	msgs, err := ch.Consume(
@@ -531,16 +504,8 @@ func main() {
 	// Message bus shared between commands
 	mb := NewMessageBus()
 
-	// intended for updating the DB when used
-	// ch := make(chan *Transaction)
-	// Used for logging commands when recieved
-	// nch := make(chan *Notification)
-
-	// Logs all transactions to user accounts
-	go UserAccountManager(mb)
 	// Monitor the current stock value
-	go stockMonitor(mb)
-	// go stockPrinter(mb)
+	// go stockMonitor(mb)
 	// Log the new command
 	notes := []string{
 		notifyADD,
@@ -554,14 +519,11 @@ func main() {
 	nch := make(chan Notification)
 	go commandLogger(nch)
 
-	waitChan := make(chan struct{}, MAX_CONCURRENT_JOBS)
 	for _, n := range notes {
 		val := n
 		c := mb.SubscribeAll(val)
-		waitChan <- struct{}{}
 		go func() {
 			// Logs all incoming commands
-			<-waitChan
 			for {
 				r := <-c
 				nch <- r
@@ -569,23 +531,36 @@ func main() {
 		}()
 	}
 
+	waitChan := make(chan struct{}, MAX_CONCURRENT_JOBS)
+	// taskChan := make(chan CMD, MAX_CONCURRENT_JOBS)
+
+	db, ctx := connect()
+	defer db.Disconnect(ctx)
+	stock_pricer := &StockPricer{
+		prices: make(map[string]Stock),
+	}
 	for {
 		select {
-		default:
-			t, err := getNextCommand(msgs)
-			cmd, err := dispatch(*t)
-
+		case next := <-msgs:
+			nextUser, err := getNextCommand(next)
 			if err == nil {
-				// Execute this new command
 				waitChan <- struct{}{}
-				go Run(cmd, mb)
-				<-waitChan
-				// Sleep is here to avoid blocking the
-				// queue server for too long
-				// time.Sleep(time.Millisecond * 1)
-			} else {
-				sendErrorLog(int64(t.Ticket), fmt.Sprint("ERROR:", err))
+				go func(cmds []Command) {
+					for _, t := range cmds {
+						cmd, err := dispatch(t)
+						if err == nil {
+							// Execute this new command
+							Run(cmd, mb, rdb, db, ctx, stock_pricer)
+						} else {
+							sendErrorLog(int64(t.Ticket), fmt.Sprint("ERROR:", err))
+						}
+					}
+					<-waitChan
+				}(*nextUser)
+
 			}
+		case <-time.After(time.Second * 5):
+			fmt.Println("5 seconds since last message")
 		}
 
 	}

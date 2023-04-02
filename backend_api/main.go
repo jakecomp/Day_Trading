@@ -24,7 +24,10 @@ var db *mongo.Client
 var ctx context.Context
 var queueServiceConn *amqp.Channel
 var queue amqp.Queue
-var upgrader = websocket.Upgrader{}
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  0,
+	WriteBufferSize: 0,
+}
 
 const database = "day_trading"
 
@@ -189,68 +192,68 @@ func socketHandler(w http.ResponseWriter, r *http.Request) {
 func socketReader(conn *websocket.Conn) {
 	// Event Loop, Handle Comms in here
 	log.Println("Waiting for messages...")
-	cmd := &command{0, "NONE", []string{"TEST"}}
+	var cmds []command
 	for {
 		_, message, err := conn.ReadMessage()
 		if err != nil {
 			fmt.Println("Error during message reading:", err)
 			break
 		}
-		//fmt.Printf("Received: %s", string(message))
-
-		err = json.Unmarshal(message, cmd)
-		//fmt.Println("JSON: ", string(message))
-
-		// Check if should queue item
-		if cmd.Command == "DUMPLOG" {
-			fmt.Printf("DUMPLOG FOUND")
-			//_, err := http.Post("http://10.9.0.9:8004/userlog", "application/json", "")
-			//if err != nil {
-			//	log.Fatal(err)
-			//}
-		} else if cmd.Command == "QUOTE" {
-
-			// Get a quote
-			allquote := make(map[string]quote)
-			var thisStock quote
-			resp, err := http.Get("http://10.9.0.6:8002/" + cmd.Args[1])
-			if resp.StatusCode != http.StatusOK {
-				fmt.Println("Error: Failed to get quote. ", err)
-
-			}
-			json.NewDecoder(resp.Body).Decode(&thisStock)
-			allquote[thisStock.Stock] = thisStock
-			log := quote_log{
-				Timestamp:    time.Now().Unix(),
-				Username:     cmd.Args[0],
-				Ticketnumber: cmd.Ticket,
-				Price:        fmt.Sprintf("%v", thisStock.Price),
-				StockSymbol:  thisStock.Stock,
-			}
-
-			log_bytes, err := json.Marshal(log)
-
-			go http.Post("http://10.9.0.9:8004/quotelog", "application/json", bytes.NewBuffer(log_bytes))
-		} else {
-			msg, _ := json.Marshal(*cmd)
-			err = queueServiceConn.Publish(
-				"",         // Exchange name
-				queue.Name, // Queue name
-				false,      // Mandatory
-				false,      // Immediate
-				amqp.Publishing{
-					ContentType: "text/json",
-					Body:        []byte(msg),
-				},
-			)
-			log.Printf(" [x] Sent %s", msg)
-			failOnError(err, "Failed to publish a message")
-
-		}
-
+		// Pass the messages along to the Worker to keep the queue saturated
+		err = queueServiceConn.Publish(
+			"",         // Exchange name
+			queue.Name, // Queue name
+			false,      // Mandatory
+			false,      // Immediate
+			amqp.Publishing{
+				ContentType: "text/json",
+				Body:        message,
+			},
+		)
 		if err != nil {
 			fmt.Println("Error during message writing:", err)
 			break
+		}
+
+		err = json.Unmarshal(message, &cmds)
+		if err != nil {
+			fmt.Println("JSON: ", cmds[0])
+		}
+
+		// Identify the important commands now
+		for _, cmd := range cmds {
+			// Check if should queue item
+			if cmd.Command == "DUMPLOG" {
+				fmt.Printf("DUMPLOG FOUND")
+				//_, err := http.Post("http://10.9.0.9:8004/userlog", "application/json", "")
+				//if err != nil {
+				//	log.Fatal(err)
+				//}
+			} else if cmd.Command == "QUOTE" {
+
+				// Get a quote
+				allquote := make(map[string]quote)
+				var thisStock quote
+				resp, err := http.Get("http://10.9.0.6:8002/" + cmd.Args[1])
+				if resp.StatusCode != http.StatusOK {
+					fmt.Println("Error: Failed to get quote. ", err)
+
+				}
+				json.NewDecoder(resp.Body).Decode(&thisStock)
+				allquote[thisStock.Stock] = thisStock
+				log := quote_log{
+					Timestamp:    time.Now().Unix(),
+					Username:     cmd.Args[0],
+					Ticketnumber: cmd.Ticket,
+					Price:        fmt.Sprintf("%v", thisStock.Price),
+					StockSymbol:  thisStock.Stock,
+				}
+
+				log_bytes, err := json.Marshal(log)
+
+				go http.Post("http://10.9.0.9:8004/quotelog", "application/json", bytes.NewBuffer(log_bytes))
+			}
+
 		}
 
 		// This Should return success or failure eventually

@@ -12,8 +12,10 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+	"sync"
 	"time"
 
+	redis "github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -59,36 +61,96 @@ type Transaction struct {
 }
 
 type CMD interface {
+	UserId() string
 	Notify() Notification
-	Prerequsite(*MessageBus) error
-	Postrequsite(*MessageBus) error
+	Prerequsite(*redis.Client) error
+	// Postrequsite(*MessageBus) error
 }
 
-func Run(c CMD, m *MessageBus) {
-	// log.Println("Executing prereq for ", reflect.TypeOf(c), c)
-	err := c.Prerequsite(m)
-	if err != nil {
-		log.Fatal(err)
+type StockPricer struct {
+	prices map[string]Stock
+	lock   sync.RWMutex
+}
+
+func (s *StockPricer) lookupPrice(stock string, ticket int64) Stock {
+	// We use RLock here to allow for concurrent reads so long as
+	// Lock has not been used. This prevents reading during writs
+	s.lock.RLock()
+	p, ok := s.prices[stock]
+	s.lock.RUnlock()
+
+	// Fallback if we still don't have a stock price
+	if !ok {
+		p = getQuote(stock)
+
+		s.lock.Lock()
+		s.prices[stock] = p
+		s.lock.Unlock()
+
+		sendDebugLog(int64(ticket),
+			fmt.Sprint("Had to look up stock manually for",
+				stock, "and got \n",
+				p.Name, "for ", p.Price))
 	}
-	// log.Println("Executed prereq for ", reflect.TypeOf(c), c)
-	// log.Println("Executing ", reflect.TypeOf(c), c)
-	// err = c.Execute(tchan)
-	if err != nil {
-		log.Fatal(err)
+	return p
+
+}
+
+func UserAccountManager(mb *MessageBus, notification Notification, db *mongo.Client, ctx context.Context, s *StockPricer) {
+	// Map storing all the currently known stock prices
+	var err error
+	last_ticket := -1
+	switch notification.Topic {
+	// case t2price := <-stockPrice:
+	// 	stockPrices[*t2price.Stock] = Stock{*t2price.Stock, *t2price.Amount}
+	case notifyADD:
+		err = addMoney(notification, db, &ctx)
+		last_ticket = int(notification.Ticket)
+	case notifyCOMMIT_SELL:
+		p := s.lookupPrice(*notification.Stock, notification.Ticket)
+		err = sellStock(p.Price, notification, db, &ctx)
+		last_ticket = int(notification.Ticket)
+	case notifyCOMMIT_BUY:
+		p := s.lookupPrice(*notification.Stock, notification.Ticket)
+		// Fallback if we still don't have a stock prices
+		err = buyStock(p.Price, notification, db, &ctx)
+		last_ticket = int(notification.Ticket)
+	case notifyFORCE_SELL:
+		// Fallback if we still don't have a stock price
+		p := s.lookupPrice(*notification.Stock, notification.Ticket)
+		err = sellStock(p.Price, notification, db, &ctx)
+		last_ticket = int(notification.Ticket)
+	case notifyFORCE_BUY:
+		p := s.lookupPrice(*notification.Stock, notification.Ticket)
+		// Fallback if we still don't have a stock price
+		err = buyStock(p.Price, notification, db, &ctx)
+		last_ticket = int(notification.Ticket)
+		// default:
+
 	}
-	log.Println("Executed ", reflect.TypeOf(c), c)
-	log.Println("Sending notification for ", reflect.TypeOf(c), c)
-	go func() {
-		n := c.Notify()
-		m.Publish(n.Topic, n)
-	}()
-	// log.Println("Notification sent for ", reflect.TypeOf(c), c)
-	// log.Println("Executing Postreq for ", reflect.TypeOf(c), c)
-	err = c.Postrequsite(m)
+
 	if err != nil {
-		log.Fatal(err)
+		sendErrorLog(int64(last_ticket), fmt.Sprint("ERROR:", err))
 	}
-	// log.Println("Executed Postreq for ", reflect.TypeOf(c), c)
+}
+
+// timout for a user
+// perticket
+// last active timestamp
+func Run(task CMD, m *MessageBus, rdb *redis.Client, db *mongo.Client, ctx context.Context, s *StockPricer) {
+	log.Println("Executing prereq for ", reflect.TypeOf(task), task)
+	err := task.Prerequsite(rdb)
+	if err != nil {
+		sendErrorLog(int64(task.Notify().Ticket), fmt.Sprint("ERROR:", err))
+		return
+	}
+	log.Println("Executed ", reflect.TypeOf(task), task)
+	log.Println("Sending notification for ", reflect.TypeOf(task), task)
+
+	n := task.Notify()
+	UserAccountManager(m, n, db, ctx, s)
+	m.Publish(n.Topic, n)
+
 }
 
 const (
@@ -178,6 +240,34 @@ type ADD struct {
 	amount float64
 }
 
+func (a ADD) UserId() string {
+	return a.userId
+}
+func (a BUY) UserId() string {
+	return a.userId
+}
+func (a SELL) UserId() string {
+	return a.userId
+}
+func (a COMMIT_BUY) UserId() string {
+	return a.userId
+}
+func (a COMMIT_SELL) UserId() string {
+	return a.userId
+}
+func (a CANCEL_SELL) UserId() string {
+	return a.userId
+}
+func (a CANCEL_BUY) UserId() string {
+	return a.userId
+}
+func (a FORCE_BUY) UserId() string {
+	return a.userId
+}
+
+func (a FORCE_SELL) UserId() string {
+	return a.userId
+}
 func (a ADD) Notify() Notification {
 	return Notification{
 		Topic:     notifyADD,
@@ -191,7 +281,10 @@ func (a ADD) Notify() Notification {
 
 // lookup user balance
 // if invalid balance return an error describing this
-func (a ADD) Prerequsite(mb *MessageBus) error {
+func (a ADD) Prerequsite(rdb *redis.Client) error {
+	if a.amount < 0 {
+		return errors.New(fmt.Sprint("Attempt to add negative value ", a.amount, " to user ", a.userId))
+	}
 	return nil
 }
 func (a ADD) Execute(ch chan *Transaction) error {
@@ -236,19 +329,14 @@ type BUY struct {
 
 // lookup user balance
 // if invalid balance return an error describing this
-func (b BUY) Prerequsite(mb *MessageBus) error {
-	// ch := mb.Subscribe(notifyADD, userid(b.userId))
-	// for n := range ch {
-	// 	if n.Userid == b.userId {
-	// 		if *n.Amount < b.amount {
-	// 			return errors.New("Not enough money for this stock")
-	// 		} else if n.Ticket < b.ticket {
+func (b BUY) Prerequsite(rdb *redis.Client) error {
+	if b.amount < 0 {
+		return errors.New(fmt.Sprint("Attempt to buy a negative amount of ", b.stock, " that amount being ", b.amount, " for user ", b.userId))
+	}
+	n := b.Notify()
+	n.Pending(rdb)
+	log.Println("set pending buy for ", b)
 	return nil
-	// 		}
-	// 	}
-	// }
-	// return errors.New("Balance Channel Prematurely Closed")
-
 }
 
 // Removed since nothing should actually happen until the commit or cancel
@@ -265,24 +353,6 @@ func (b BUY) Notify() Notification {
 		Stock:     &b.stock,
 		Amount:    &b.amount,
 	}
-}
-
-func (b BUY) Postrequsite(mb *MessageBus) error {
-	commitChan := mb.Subscribe(notifyCOMMIT_BUY, userid(b.userId))
-	cancelChan := mb.Subscribe(notifyCANCEL_BUY, userid(b.userId))
-
-	select {
-	case n := <-commitChan:
-		if n.Userid == b.userId && n.Ticket > b.ticket {
-			return nil
-		}
-
-	case n := <-cancelChan:
-		if n.Userid == b.userId && n.Ticket > b.ticket {
-			return nil
-		}
-	}
-	return nil
 }
 
 // Purpose:
@@ -311,16 +381,18 @@ type COMMIT_BUY struct {
 	buy    Notification
 }
 
-func (b *COMMIT_BUY) Prerequsite(mb *MessageBus) error {
-	ch := mb.Subscribe(notifyBUY, userid(b.userId))
-
-	for n := range ch {
-		if n.Userid == b.userId && n.Ticket < b.ticket {
-			b.buy = n
-			return nil
-		}
+func (b *COMMIT_BUY) Prerequsite(rdb *redis.Client) error {
+	n, err := lastPending(b.userId, notifyBUY, rdb)
+	if err != nil && err != redis.Nil {
+		log.Println(b, "failed to commit purchase")
+		return err
+	} else if n != nil && n.Userid == b.userId && n.Ticket < b.ticket {
+		log.Println(b, "commited purchase of ", *b)
+		b.buy = *n
+		return nil
 	}
-	return errors.New("Balance Channel Prematurely Closed")
+
+	return errors.New(fmt.Sprintln("No lingering buy found for ", b, "with n ", n))
 
 }
 
@@ -374,17 +446,18 @@ type CANCEL_BUY struct {
 	buy    Notification
 }
 
-func (b *CANCEL_BUY) Prerequsite(mb *MessageBus) error {
-	// ch := mb.Subscribe(notifyBUY, userid(b.userId))
+func (b *CANCEL_BUY) Prerequsite(rdb *redis.Client) error {
+	n, err := lastPending(b.userId, notifyBUY, rdb)
+	if err != nil && err != redis.Nil {
+		log.Println(b, "failed to canceled purchase")
+		return err
+	} else if n != nil && n.Userid == b.userId && n.Ticket < b.ticket {
+		log.Println(b, "canceled the purchase of ", *n)
+		sendDebugLog(b.ticket, fmt.Sprintln("Cancelling purchase of ", *n, " with ", b))
+		return nil
+	}
 
-	// for n := range ch {
-	// 	if n.Userid == b.userId && n.Ticket < b.ticket {
-	// 		b.buy = n
-	// 		return nil
-	// 	}
-	// }
-	// return errors.New("Balance Channel Prematurely Closed")
-	return nil
+	return errors.New(fmt.Sprintln("No lingering buy found for ", b))
 }
 
 func (b CANCEL_BUY) Execute(ch chan *Transaction) error {
@@ -430,20 +503,14 @@ type SELL struct {
 	amount float64
 }
 
-func (s SELL) Prerequsite(mb *MessageBus) error {
-	// // Wait for the user to buy this stock
-	// ch := mb.Subscribe(notifyCOMMIT_BUY, userid(s.userId))
+func (s SELL) Prerequsite(rdb *redis.Client) error {
+	if s.amount < 0 {
+		return errors.New(fmt.Sprint("Attempt to sell a negative amount of ", s.stock, " that amount being ", s.amount, " for user ", s.userId))
+	}
+	n := s.Notify()
+	n.Pending(rdb)
+	log.Println("set pending sell for ", s)
 
-	// for n := range ch {
-	// 	if n.Userid == s.userId {
-	// 		// if *n.Amount > s.amount {
-	// 		// 	return errors.New(fmt.Sprintf("Don't have %f of %s", s.amount, s.stock))
-	// 		// } else {
-	// 		return nil
-	// 		// }
-	// 	}
-	// }
-	// return errors.New("Balance Channel Prematurely Closed")
 	return nil
 }
 func (b SELL) Execute(ch chan *Transaction) error {
@@ -459,24 +526,6 @@ func (s SELL) Notify() Notification {
 		Stock:     &s.stock,
 		Amount:    &s.amount,
 	}
-}
-
-func (s SELL) Postrequsite(mb *MessageBus) error {
-	// TODO determine how to lookup user balance
-	commitChan := mb.Subscribe(notifyCOMMIT_SELL, userid(s.userId))
-	cancelChan := mb.Subscribe(notifyCANCEL_SELL, userid(s.userId))
-	select {
-	case n := <-commitChan:
-		if n.Userid == s.userId && n.Ticket > s.ticket {
-			return nil
-		}
-
-	case n := <-cancelChan:
-		if n.Userid == s.userId && n.Ticket > s.ticket {
-			return nil
-		}
-	}
-	return nil
 }
 
 // Purpose:
@@ -503,16 +552,17 @@ type COMMIT_SELL struct {
 	sell   Notification
 }
 
-func (s *COMMIT_SELL) Prerequsite(mb *MessageBus) error {
-	ch := mb.Subscribe(notifySELL, userid(s.userId))
-
-	for n := range ch {
-		if n.Userid == s.userId && n.Ticket < s.ticket {
-			s.sell = n
-			return nil
-		}
+func (s *COMMIT_SELL) Prerequsite(rdb *redis.Client) error {
+	n, err := lastPending(s.userId, notifySELL, rdb)
+	if err != nil && err != redis.Nil {
+		return err
+	} else if n != nil && n.Userid == s.userId && n.Ticket < s.ticket {
+		log.Println(s, "commited the sale of ", *n)
+		s.sell = *n
+		return nil
 	}
-	return errors.New("Balance Channel Prematurely Closed")
+
+	return errors.New(fmt.Sprintln("No lingering sells found for ", s))
 
 }
 
@@ -565,18 +615,18 @@ type CANCEL_SELL struct {
 	sell   Notification
 }
 
-func (s *CANCEL_SELL) Prerequsite(mb *MessageBus) error {
-	// ch := mb.Subscribe(notifySELL, userid(s.userId))
-
-	// for n := range ch {
-	// 	if n.Userid == s.userId && n.Ticket < s.ticket {
-	// 		s.sell = n
-	// 		return nil
-	// 	}
-	// }
-	// return errors.New("Balance Channel Prematurely Closed")
-	return nil
-
+func (s *CANCEL_SELL) Prerequsite(rdb *redis.Client) error {
+	n, err := lastPending(s.userId, notifySELL, rdb)
+	if err != nil && err != redis.Nil {
+		log.Println(s, "failed to find a sale to cancel")
+		return err
+	} else if n != nil && n.Userid == s.userId && n.Ticket < s.ticket {
+		log.Println(s, "cancelled the sale of ", *n)
+		s.sell = *n
+		sendDebugLog(s.ticket, fmt.Sprintln("Cancelling sale of ", *n, " with ", s))
+		return nil
+	}
+	return errors.New(fmt.Sprintln("No lingering sells found for ", s))
 }
 
 func (s CANCEL_SELL) Execute(ch chan *Transaction) error {
@@ -625,7 +675,7 @@ type FORCE_BUY struct {
 	amount float64
 }
 
-func (b *FORCE_BUY) Prerequsite(mb *MessageBus) error {
+func (b *FORCE_BUY) Prerequsite(rdb *redis.Client) error {
 	return nil
 }
 
@@ -682,7 +732,7 @@ type FORCE_SELL struct {
 	amount float64
 }
 
-func (b *FORCE_SELL) Prerequsite(mb *MessageBus) error {
+func (b *FORCE_SELL) Prerequsite(rdb *redis.Client) error {
 	return nil
 }
 

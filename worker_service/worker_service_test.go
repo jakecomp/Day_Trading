@@ -1,190 +1,279 @@
 package main
 
 import (
+	"fmt"
+	"github.com/streadway/amqp"
 	"os"
 	"testing"
 )
 
-func TestCommandsBuyCommit(t *testing.T) {
-	ch := make(chan *Transaction)
-	mb := NewMessageBus()
-	finch := make(chan error)
+func setupNewUserInBackend(userid string, conn *amqp.Connection) *amqp.Channel {
+	ch, err := conn.Channel()
+	failOnError(err, "Failed to connect to RabbitMQ")
+	// err = ch.ExchangeDeclarePassive(
+	// 	"user_tasks", // name
+	// 	"topic",      // type
+	// 	true,         // durable
+	// 	false,        // auto-deleted
+	// 	false,        // internal
+	// 	false,        // no-wait
+	// 	nil,          // arguments
+	// )
+	// // If it does not ex ist
+	// if err != nil {
+	print("creating exchange")
+	err = ch.ExchangeDeclare(
+		"user_tasks", // name
+		"topic",      // type
+		true,         // durable
+		false,        // auto-deleted
+		false,        // internal
+		false,        // no-wait
+		nil,          // arguments
+	)
+	// }
+	q, err := ch.QueueDeclare(
+		userid, // name
+		true,   // durable
+		false,  // delete when unused
+		true,   // exclusive
+		false,  // no-wait
+		nil,    // arguments
+	)
+	err = ch.QueueBind(
+		q.Name,       // queue name
+		userid,       // routing key
+		"user_tasks", // exchange
+		false,
+		nil)
+	// failOnError(err, "Failed to bind to exchange")
 
-	go Run(ADD{ticket: 1, userId: "me", amount: 32.1}, mb, ch)
-	go Run(BUY{ticket: 2, userId: "me", stock: "ABC", cost: 32.1, amount: 1.0}, mb, ch)
-	go func() {
-		Run(&COMMIT_BUY{ticket: 3, userId: "me"}, mb, ch)
-		finch <- nil
-	}()
+	return ch
+}
 
-	addT := <-ch
-	if addT.Command != notifyADD {
-		t.Fatalf("This transaction should have been an ADD %v", addT.Command)
-	}
-	buyT := <-ch
-	if buyT.Command != notifyCOMMIT_BUY {
-		t.Fatalf("This transaction should have been a COMMIT_BUY but was %v", buyT.Command)
-	}
-	err := <-finch
+// func setupForinternalWorker(user string, conn *amqp.Connection) (<-chan amqp.Delivery, error) {
+// 	conn, err := dial("amqp://guest:guest@" + rabbitmqHOST + ":5672/")
+// 	ch, err := conn.Channel()
+// 	failOnError(err, "Failed to connect to RabbitMQ")
+
+// 	err = ch.ExchangeDeclarePassive(
+// 		"user_tasks", // name
+// 		"topic",      // type
+// 		true,         // durable
+// 		false,        // auto-deleted
+// 		false,        // internal
+// 		false,        // no-wait
+// 		nil,          // arguments
+// 	)
+// 	// If it does not exist
+// 	if err != nil {
+// 		err = ch.ExchangeDeclare(
+// 			"user_tasks", // name
+// 			"topic",      // type
+// 			true,         // durable
+// 			false,        // auto-deleted
+// 			false,        // internal
+// 			false,        // no-wait
+// 			nil,          // arguments
+// 		)
+// 	}
+
+// 	fromBackend := "user_tasks#worker"
+// 	// q, err := ch.QueueDeclarePassive(
+// 	// 	fromBackend, // name
+// 	// 	false,       // durable
+// 	// 	false,       // delete when unused
+// 	// 	true,        // exclusive
+// 	// 	false,       // no-wait
+// 	// 	nil,         // arguments
+// 	// )
+// 	// // If it does not exist
+// 	// if err != nil {
+// 	q, err := ch.QueueDeclare(
+// 		fromBackend, // name
+// 		false,       // durable
+// 		false,       // delete when unused
+// 		false,       // exclusive
+// 		false,       // no-wait
+// 		nil,         // arguments
+// 	)
+// 	// }
+// 	err = ch.QueueBind(
+// 		q.Name,       // queue name
+// 		user,         // routing key
+// 		"user_tasks", // exchange
+// 		false,
+// 		nil)
+// 	if err != nil {
+// 		panic(err)
+// 	}
+// 	return ch.Consume(q.Name, "", false, false, false, false, nil)
+
+// }
+
+// func setupForWorker(conn *amqp.Connection) (<-chan amqp.Delivery, error) {
+// 	ch, err := conn.Channel()
+// 	failOnError(err, "Failed to connect to RabbitMQ")
+
+// 	err = ch.ExchangeDeclarePassive(
+// 		"user_tasks", // name
+// 		"topic",      // type
+// 		true,         // durable
+// 		false,        // auto-deleted
+// 		false,        // internal
+// 		false,        // no-wait
+// 		nil,          // arguments
+// 	)
+// 	// If it does not exist
+// 	if err != nil {
+// 		err = ch.ExchangeDeclare(
+// 			"user_tasks", // name
+// 			"topic",      // type
+// 			true,         // durable
+// 			false,        // auto-deleted
+// 			false,        // internal
+// 			false,        // no-wait
+// 			nil,          // arguments
+// 		)
+// 	}
+
+//		fromBackend := "user_tasks#worker"
+//		// q, err := ch.QueueDeclarePassive(
+//		// 	fromBackend, // name
+//		// 	false,       // durable
+//		// 	false,       // delete when unused
+//		// 	true,        // exclusive
+//		// 	false,       // no-wait
+//		// 	nil,         // arguments
+//		// )
+//		// // If it does not exist
+//		// if err != nil {
+//		q, err := ch.QueueDeclare(
+//			fromBackend, // name
+//			false,       // durable
+//			false,       // delete when unused
+//			true,        // exclusive
+//			false,       // no-wait
+//			nil,         // arguments
+//		)
+//		// }
+//		err = ch.QueueBind(
+//			q.Name,       // queue name
+//			"*",          // routing key
+//			"user_tasks", // exchange
+//			false,
+//			nil)
+//		if err != nil {
+//			panic(err)
+//		}
+//		return ch.Consume(q.Name, "", false, false, false, false, nil)
+//	}
+func getNextMessageForDictator(conn *amqp.Connection) (<-chan amqp.Delivery, error) {
+	ch, err := conn.Channel()
+	failOnError(err, "Failed to connect to RabbitMQ")
+
+	// err = ch.ExchangeDeclarePassive(
+	// 	"user_tasks", // name
+	// 	"topic",      // type
+	// 	true,         // durable
+	// 	false,        // auto-deleted
+	// 	false,        // internal
+	// 	false,        // no-wait
+	// 	nil,          // arguments
+	// )
+	// // If it does not exist
+	// if err != nil {
+	err = ch.ExchangeDeclare(
+		"user_tasks", // name
+		"topic",      // type
+		true,         // durable
+		false,        // auto-deleted
+		false,        // internal
+		false,        // no-wait
+		nil,          // arguments
+	)
+	// }
+
+	fromBackend := "dick"
+	// q, err := ch.QueueDeclarePassive(
+	// 	fromBackend, // name
+	// 	false,       // durable
+	// 	false,       // delete when unused
+	// 	true,        // exclusive
+	// 	false,       // no-wait
+	// 	nil,         // arguments
+	// )
+	// // If it does not exist
+	// if err != nil {
+	q, err := ch.QueueDeclare(
+		fromBackend, // name
+		true,        // durable
+		false,       // delete when unused
+		false,       // exclusive TODO make this true
+		false,       // no-wait
+		nil,         // arguments
+	)
+	// }
+	err = ch.QueueBind(
+		q.Name,       // queue name
+		"*",          // routing key
+		"user_tasks", // exchange
+		false,
+		nil)
 	if err != nil {
-		t.Fail()
+		panic(err)
 	}
+	return ch.Consume(q.Name, "", false, false, false, false, nil)
 }
 
-func TestCommandsBuyCancel(t *testing.T) {
-	ch := make(chan *Transaction)
-	mb := NewMessageBus()
-	finch := make(chan error)
+func TestSetupUserTasks(t *testing.T) {
+	conn, err := dial("amqp://guest:guest@" + rabbitmqHOST + ":5672/")
+	// connect to an existing exchange
+	userid := "Xyz"
+	userid2 := "Xyzl"
 
-	go Run(ADD{ticket: 1, userId: "me", amount: 32.1}, mb, ch)
-	go Run(BUY{ticket: 2, userId: "me", stock: "ABC", cost: 32.1, amount: 1.0}, mb, ch)
-	go func() {
-		Run(&CANCEL_BUY{ticket: 3, userId: "me"}, mb, ch)
-		finch <- nil
-	}()
-	addT := <-ch
-	if addT.Command != notifyADD {
-		t.Fatalf("This transaction should have been an ADD %v", addT.Command)
-	}
-}
+	print("setup worker")
+	setupNewUserInBackend(userid, conn).Publish("", userid, false, false,
+		amqp.Publishing{
+			ContentType: "text/plain",
+			Body:        []byte("hello"),
+		},
+	)
+	setupNewUserInBackend(userid2, conn).Publish("", userid2, false, false,
+		amqp.Publishing{
+			ContentType: "text/plain",
+			Body:        []byte("hello"),
+		},
+	)
+	fmt.Println("setup backend")
+	done1 := make(chan struct{})
+	c, _ := getNextMessageForDictator(conn)
+	dictator := func() {
+		for {
+			l := <-c
+			fmt.Println("got value", l.RoutingKey)
+			userid := l.RoutingKey
+			fmt.Println("routing key was ", userid)
+			conchan, _ := conn.Channel()
+			q, _ := conchan.QueueInspect(userid)
+			fmt.Println("queue found ", q)
+			if q.Consumers == 0 {
+				c, err := conchan.Consume(q.Name, "", false, false, false, false, nil)
+				cmd := <-c
+				fmt.Println(string(cmd.Body), err)
+				conchan.Close()
+				// done1 <- struct{}{}
+			}
 
-func TestCommandsSELLCommit(t *testing.T) {
-	ch := make(chan *Transaction)
-	mb := NewMessageBus()
-	finch := make(chan error)
+		}
+	}
+	dictator()
+	<-done1
+	<-done1
 
-	go Run(ADD{ticket: 1, userId: "me", amount: 32.1}, mb, ch)
-	go Run(BUY{ticket: 2, userId: "me", stock: "ABC", cost: 32.1, amount: 1.0}, mb, ch)
-	go Run(&COMMIT_BUY{ticket: 3, userId: "me"}, mb, ch)
-	go Run(SELL{ticket: 4, userId: "me", stock: "ABC", cost: 32.1, amount: 1.0}, mb, ch)
-	go func() {
-		Run(&COMMIT_SELL{ticket: 5, userId: "me"}, mb, ch)
-		finch <- nil
-	}()
-	sell := []*Transaction{<-ch, <-ch, <-ch}
-	if sell[0].Command != notifyADD {
-		t.Fatalf("This transaction should have been an ADD %v", sell[0].Command)
-	}
-	if sell[1].Command != notifyCOMMIT_BUY {
-		t.Fatalf("This transaction should have been an COMMIT_BUY %v", sell[1].Command)
-	}
-	if sell[2].Command != notifyCOMMIT_SELL {
-		t.Fatalf("This transaction should have been an COMMIT_SELL %v", sell[2].Command)
-	}
-	err := <-finch
 	if err != nil {
+
 		t.Fail()
-	}
-}
-
-func TestCommandsSELLCancel(t *testing.T) {
-	ch := make(chan *Transaction)
-	mb := NewMessageBus()
-	finch := make(chan error)
-
-	go Run(ADD{ticket: 1, userId: "me", amount: 32.1}, mb, ch)
-	go Run(BUY{ticket: 2, userId: "me", stock: "ABC", cost: 32.1, amount: 1.0}, mb, ch)
-	go Run(&COMMIT_BUY{ticket: 3, userId: "me"}, mb, ch)
-	go Run(SELL{ticket: 4, userId: "me", stock: "ABC", cost: 32.1, amount: 1.0}, mb, ch)
-	go func() {
-		Run(&CANCEL_SELL{ticket: 5, userId: "me"}, mb, ch)
-		finch <- nil
-	}()
-	sell := []*Transaction{<-ch, <-ch}
-	if sell[0].Command != notifyADD {
-		t.Fatalf("This transaction should have been an ADD %v", sell[0].Command)
-	}
-	if sell[1].Command != notifyCOMMIT_BUY {
-		t.Fatalf("This transaction should have been an COMMIT_BUY %v", sell[1].Command)
-	}
-	err := <-finch
-	if err != nil {
-		t.Fail()
-	}
-}
-
-func TestCommandsSELLCommitMultiUser(t *testing.T) {
-	ch := make(chan *Transaction)
-	mb := NewMessageBus()
-	finch := make(chan error)
-
-	go Run(ADD{ticket: 1, userId: "me", amount: 32.1}, mb, ch)
-	go Run(BUY{ticket: 2, userId: "me", stock: "ABC", cost: 32.1, amount: 1.0}, mb, ch)
-	go Run(BUY{ticket: 3, userId: "me", stock: "xyz", cost: 32.1, amount: 1.0}, mb, ch)
-	go Run(BUY{ticket: 4, userId: "me", stock: "Nile", cost: 10.1, amount: 1.0}, mb, ch)
-	go Run(&COMMIT_BUY{ticket: 5, userId: "me"}, mb, ch)
-	go Run(SELL{ticket: 6, userId: "me", stock: "ABC", cost: 33.1, amount: 1.0}, mb, ch)
-	go func() {
-		Run(&COMMIT_SELL{ticket: 7, userId: "me"}, mb, ch)
-		finch <- nil
-	}()
-	sell := []*Transaction{<-ch, <-ch, <-ch}
-	if sell[0].Command != notifyADD {
-		t.Fatalf("This transaction should have been an ADD %v", sell[0].Command)
-	}
-	if sell[1].Command != notifyCOMMIT_SELL && sell[1].User_id != "me" && sell[1].Stock_id == "Nile" {
-		t.Fatalf("This transaction should have been an COMMIT_SELL %v", sell[1].Command)
-	}
-	if sell[2].Command != notifyCOMMIT_SELL {
-		t.Fatalf("This transaction should have been an COMMIT_SELL %v", sell[2].Command)
-	}
-	err := <-finch
-	if err != nil {
-		t.Fail()
-	}
-}
-
-func TestCommandsBUYCommitMultiUser(t *testing.T) {
-	ch := make(chan *Transaction)
-	mb := NewMessageBus()
-	finch := make(chan error)
-
-	go Run(ADD{ticket: 1, userId: "me", amount: 35.0}, mb, ch)
-	go Run(ADD{ticket: 2, userId: "you", amount: 35.0}, mb, ch)
-	go Run(BUY{ticket: 3, userId: "me", stock: "ABC", cost: 33.1, amount: 1.0}, mb, ch)
-	go Run(BUY{ticket: 4, userId: "you", stock: "ABC", cost: 33.1, amount: 1.0}, mb, ch)
-	go func() {
-		Run(&COMMIT_BUY{ticket: 5, userId: "me"}, mb, ch)
-		finch <- nil
-	}()
-
-	go func() {
-		Run(&COMMIT_BUY{ticket: 7, userId: "you"}, mb, ch)
-		finch <- nil
-	}()
-	sellT := <-ch
-	if sellT.Command != notifyADD && sellT.User_id != "you" && sellT.User_id != "me" {
-		t.Fatalf("This transaction should have been an COMMIT_SELL %v", sellT.Command)
-	}
-	sellT2 := <-ch
-	if sellT2.Command != notifyADD && sellT2.User_id != "you" && sellT2.User_id != "me" {
-		t.Fatalf("This transaction should have been an COMMIT_SELL %v", sellT2.Command)
-	}
-	sellT3 := <-ch
-	if sellT3.Command != notifyCOMMIT_BUY && sellT3.User_id != "me" {
-		t.Fatalf("This transaction should have been an COMMIT_SELL %v", sellT2.Command)
-	}
-
-	err := <-finch
-	if err != nil {
-		t.Fail()
-	}
-}
-
-func TestCommandsBUYNotEnoughMoney(t *testing.T) {
-	ch := make(chan *Transaction)
-	mb := NewMessageBus()
-	finch := make(chan error)
-
-	go Run(ADD{userId: "me", amount: 2.0}, mb, ch)
-	go Run(BUY{userId: "me", stock: "ABC", cost: 35.1, amount: 1.0}, mb, ch)
-	go func() {
-		Run(&COMMIT_BUY{userId: "me"}, mb, ch)
-		finch <- nil
-	}()
-	sellT := <-ch
-	if sellT.Command != notifyADD && sellT.User_id != "you" && sellT.User_id != "me" {
-		t.Fatalf("This transaction should have been an COMMIT_SELL %v", sellT.Command)
 	}
 }
 
