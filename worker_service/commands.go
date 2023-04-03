@@ -42,7 +42,6 @@ type Transaction struct {
 }
 
 type CMD interface {
-	UserId() UserId
 	Notify() Notification
 	Prerequsite(t *TransactionStore) error
 	// Postrequsite(*MessageBus) error
@@ -249,34 +248,6 @@ type ADD struct {
 	amount float64
 }
 
-func (a ADD) UserId() UserId {
-	return a.userId
-}
-func (a BUY) UserId() UserId {
-	return a.userId
-}
-func (a SELL) UserId() UserId {
-	return a.userId
-}
-func (a COMMIT_BUY) UserId() UserId {
-	return a.userId
-}
-func (a COMMIT_SELL) UserId() UserId {
-	return a.userId
-}
-func (a CANCEL_SELL) UserId() UserId {
-	return a.userId
-}
-func (a CANCEL_BUY) UserId() UserId {
-	return a.userId
-}
-func (a FORCE_BUY) UserId() UserId {
-	return a.userId
-}
-
-func (a FORCE_SELL) UserId() UserId {
-	return a.userId
-}
 func (a ADD) Notify() Notification {
 	return Notification{
 		Topic:     notifyADD,
