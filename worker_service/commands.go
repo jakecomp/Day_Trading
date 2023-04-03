@@ -7,6 +7,7 @@ package main
 // used for selling and buying
 // TODO assert timeframe for commit and cancel commands
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -126,97 +127,110 @@ func UserAccountManager(mb *MessageBus, notification Notification, us *UserStore
 }
 
 func addMoney(newMoney Notification, s *UserStore) error {
-	current_user_doc, err := newMoney.ReadUser(s)
+	return s.Execute(func(context.Context) error {
+		current_user_doc, err := newMoney.ReadUser(s)
+		if err != nil {
+			return err
+		}
+		sendDebugLog(int64(newMoney.Ticket),
+			fmt.Sprint("user doc before adding money\n",
+				current_user_doc, "for notification\n",
+				newMoney))
 
-	sendDebugLog(int64(newMoney.Ticket),
-		fmt.Sprint("user doc before adding money\n",
-			current_user_doc, "for notification\n",
-			newMoney))
+		current_user_doc.Balance += float32(*newMoney.Amount)
 
-	current_user_doc.Balance += float32(*newMoney.Amount)
+		newMoney.Topic = "add"
+		sendAccountLog(&newMoney, current_user_doc.Balance)
 
-	newMoney.Topic = "add"
-	sendAccountLog(&newMoney, current_user_doc.Balance)
+		sendDebugLog(int64(newMoney.Ticket),
+			fmt.Sprint("user doc after adding money\n",
+				current_user_doc, "for notification\n",
+				newMoney))
 
-	sendDebugLog(int64(newMoney.Ticket),
-		fmt.Sprint("user doc after adding money\n",
-			current_user_doc, "for notification\n",
-			newMoney))
-
-	current_user_doc.Backup(s)
-	return err
+		err = current_user_doc.Backup(s)
+		return err
+	})
 }
 
 func sellStock(price float64, newMoney Notification, s *UserStore) error {
-	current_user_doc, err := newMoney.ReadUser(s)
+	stocksSold := *newMoney.Amount / price
+	var current_user_doc *user_doc
+	var err error
+	err = s.Execute(func(context.Context) error {
+		current_user_doc, err = newMoney.ReadUser(s)
 
-	if err != nil {
-		return err
-	}
-	stock_owned, ok := current_user_doc.Stonks[*newMoney.Stock]
-	if !ok || stock_owned <= 0 {
-		return errors.New(fmt.Sprint("ERROR: less than 0 stock available", *newMoney.Stock, *newMoney.Stock, " for price ", price))
-	}
+		if err != nil {
+			return err
+		}
+		stock_owned, ok := current_user_doc.Stonks[*newMoney.Stock]
+		if !ok || stock_owned <= 0 {
+			return errors.New(fmt.Sprint("ERROR: less than 0 stock available", *newMoney.Stock, *newMoney.Stock, " for price ", price))
+		}
 
-	sendDebugLog(int64(newMoney.Ticket),
-		fmt.Sprint("user doc before sale money\n",
+		sendDebugLog(int64(newMoney.Ticket),
+			fmt.Sprint("user doc before sale money\n",
+				current_user_doc, "for notification\n",
+				newMoney))
+
+		current_user_doc.Balance += float32(*newMoney.Amount)
+		current_user_doc.Stonks[*newMoney.Stock] -= stocksSold
+		if current_user_doc.Stonks[*newMoney.Stock] < 0 {
+			return errors.New(fmt.Sprint("Negative amount of ", *newMoney.Stock, " owned by ", current_user_doc.Username, " is not allowed during sale of ", *newMoney.Stock, " for price ", price))
+		}
+
+		sendDebugLog(int64(newMoney.Ticket), fmt.Sprint("user doc after sale money\n",
 			current_user_doc, "for notification\n",
 			newMoney))
+		newMoney.Topic = "add"
+		sendAccountLog(&newMoney, current_user_doc.Balance)
 
-	current_user_doc.Balance += float32(*newMoney.Amount)
-	current_user_doc.Stonks[*newMoney.Stock] -= *newMoney.Amount / price
-	if current_user_doc.Stonks[*newMoney.Stock] < 0 {
-		return errors.New(fmt.Sprint("Negative amount of ", *newMoney.Stock, " owned by ", current_user_doc.Username, " is not allowed during sale of ", *newMoney.Stock, " for price ", price))
-	}
+		err = current_user_doc.Backup(s)
+		return err
+	})
 
-	newMoney.Topic = "add"
-	sendAccountLog(&newMoney, current_user_doc.Balance)
-
-	sendDebugLog(int64(newMoney.Ticket), fmt.Sprint("user doc after sale money\n",
-		current_user_doc, "for notification\n",
-		newMoney))
-
-	current_user_doc.Backup(s)
-	return nil
+	return err
 }
 
-func buyStock(price float64, newMoney Notification, s *UserStore) error {
-	current_user_doc, err := newMoney.ReadUser(s)
+func buyStock(price float64, newStock Notification, s *UserStore) error {
+	return s.Execute(func(context.Context) error {
+		current_user_doc, err := newStock.ReadUser(s)
 
-	if err != nil {
+		if err != nil {
+			return err
+		}
+
+		sendDebugLog(int64(newStock.Ticket),
+			fmt.Sprint("user doc before purchase money\n",
+				current_user_doc, "for notification\n",
+				newStock, " with buy amount ", *newStock.Amount, " of stock ", *newStock.Stock, "\n",
+				"With a value of:", price))
+
+		current_user_doc.Balance -= float32(*newStock.Amount)
+		if current_user_doc.Balance < 0 {
+			return errors.New(fmt.Sprint("Negative balance is not allowed during buy for ", *newStock.Stock, " for price ", price))
+		}
+
+		_, ok := current_user_doc.Stonks[*newStock.Stock]
+		if !ok {
+			current_user_doc.Stonks[*newStock.Stock] = *newStock.Amount / price
+		} else {
+			current_user_doc.Stonks[*newStock.Stock] += *newStock.Amount / price
+		}
+
+		sendDebugLog(int64(newStock.Ticket),
+			fmt.Sprint("user doc after purchase money\n",
+				current_user_doc,
+				"for notification\n",
+				newStock,
+				" with buy amount ", *newStock.Amount, " of stock ", *newStock.Stock, "\n",
+				"With a value of:", price))
+
+		newStock.Topic = "remove"
+		sendAccountLog(&newStock, current_user_doc.Balance)
+
+		err = current_user_doc.Backup(s)
 		return err
-	}
-	sendDebugLog(int64(newMoney.Ticket),
-		fmt.Sprint("user doc before purchase money\n",
-			current_user_doc, "for notification\n",
-			newMoney, " with buy amount ", *newMoney.Amount, " of stock ", *newMoney.Stock, "\n",
-			"With a value of:", price))
-
-	current_user_doc.Balance -= float32(*newMoney.Amount)
-	if current_user_doc.Balance < 0 {
-		return errors.New(fmt.Sprint("Negative balance is not allowed during buy for ", *newMoney.Stock, " for price ", price))
-	}
-
-	_, ok := current_user_doc.Stonks[*newMoney.Stock]
-	if !ok {
-		current_user_doc.Stonks[*newMoney.Stock] = *newMoney.Amount / price
-	} else {
-		current_user_doc.Stonks[*newMoney.Stock] += *newMoney.Amount / price
-	}
-
-	sendDebugLog(int64(newMoney.Ticket),
-		fmt.Sprint("user doc after purchase money\n",
-			current_user_doc,
-			"for notification\n",
-			newMoney,
-			" with buy amount ", *newMoney.Amount, " of stock ", *newMoney.Stock, "\n",
-			"With a value of:", price))
-
-	newMoney.Topic = "remove"
-	sendAccountLog(&newMoney, current_user_doc.Balance)
-
-	current_user_doc.Backup(s)
-	return err
+	})
 }
 
 // timout for a user
