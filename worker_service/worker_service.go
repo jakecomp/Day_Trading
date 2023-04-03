@@ -8,7 +8,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 )
@@ -83,136 +82,9 @@ func dispatch(cmd Command) (CMD, error) {
 
 func getNextCommand(resp amqp.Delivery) (*[]Command, error) {
 	// Attempt Dequeue
-
 	var cmd []Command
 	err := json.Unmarshal(resp.Body, &cmd)
 	return &cmd, err
-}
-
-// Logs incomming commands
-func startCommandLogger(mb *MessageBus) {
-	notes := []CommandType{
-		notifyADD,
-		notifyBUY,
-		notifySELL,
-		notifyCOMMIT_BUY,
-		notifyCOMMIT_SELL,
-		notifyCANCEL_BUY,
-		notifyCANCEL_SELL,
-	}
-
-	nch := make(chan Notification)
-
-	for _, n := range notes {
-		val := n
-		c := mb.SubscribeAll(val)
-		go func() {
-			// Logs all incoming commands
-			for {
-				r := <-c
-				nch <- r
-			}
-		}()
-	}
-	go func() {
-		for {
-			sendUserLog(<-nch)
-		}
-	}()
-}
-
-func addMoney(newMoney Notification, s *UserStore) error {
-	current_user_doc, err := newMoney.ReadUser(s)
-
-	sendDebugLog(int64(newMoney.Ticket),
-		fmt.Sprint("user doc before adding money\n",
-			current_user_doc, "for notification\n",
-			newMoney))
-
-	current_user_doc.Balance += float32(*newMoney.Amount)
-
-	newMoney.Topic = "add"
-	sendAccountLog(&newMoney, current_user_doc.Balance)
-
-	sendDebugLog(int64(newMoney.Ticket),
-		fmt.Sprint("user doc after adding money\n",
-			current_user_doc, "for notification\n",
-			newMoney))
-
-	current_user_doc.Backup(s)
-	return err
-}
-
-func sellStock(price float64, newMoney Notification, s *UserStore) error {
-	current_user_doc, err := newMoney.ReadUser(s)
-
-	if err != nil {
-		return err
-	}
-	stock_owned, ok := current_user_doc.Stonks[*newMoney.Stock]
-	if !ok || stock_owned <= 0 {
-		return errors.New(fmt.Sprint("ERROR: less than 0 stock available", *newMoney.Stock, *newMoney.Stock, " for price ", price))
-	}
-
-	sendDebugLog(int64(newMoney.Ticket),
-		fmt.Sprint("user doc before sale money\n",
-			current_user_doc, "for notification\n",
-			newMoney))
-
-	current_user_doc.Balance += float32(*newMoney.Amount)
-	current_user_doc.Stonks[*newMoney.Stock] -= *newMoney.Amount / price
-	if current_user_doc.Stonks[*newMoney.Stock] < 0 {
-		return errors.New(fmt.Sprint("Negative amount of ", *newMoney.Stock, " owned by ", current_user_doc.Username, " is not allowed during sale of ", *newMoney.Stock, " for price ", price))
-	}
-
-	newMoney.Topic = "add"
-	sendAccountLog(&newMoney, current_user_doc.Balance)
-
-	sendDebugLog(int64(newMoney.Ticket), fmt.Sprint("user doc after sale money\n",
-		current_user_doc, "for notification\n",
-		newMoney))
-
-	current_user_doc.Backup(s)
-	return nil
-}
-
-func buyStock(price float64, newMoney Notification, s *UserStore) error {
-	current_user_doc, err := newMoney.ReadUser(s)
-
-	if err != nil {
-		return err
-	}
-	sendDebugLog(int64(newMoney.Ticket),
-		fmt.Sprint("user doc before purchase money\n",
-			current_user_doc, "for notification\n",
-			newMoney, " with buy amount ", *newMoney.Amount, " of stock ", *newMoney.Stock, "\n",
-			"With a value of:", price))
-
-	current_user_doc.Balance -= float32(*newMoney.Amount)
-	if current_user_doc.Balance < 0 {
-		return errors.New(fmt.Sprint("Negative balance is not allowed during buy for ", *newMoney.Stock, " for price ", price))
-	}
-
-	_, ok := current_user_doc.Stonks[*newMoney.Stock]
-	if !ok {
-		current_user_doc.Stonks[*newMoney.Stock] = *newMoney.Amount / price
-	} else {
-		current_user_doc.Stonks[*newMoney.Stock] += *newMoney.Amount / price
-	}
-
-	sendDebugLog(int64(newMoney.Ticket),
-		fmt.Sprint("user doc after purchase money\n",
-			current_user_doc,
-			"for notification\n",
-			newMoney,
-			" with buy amount ", *newMoney.Amount, " of stock ", *newMoney.Stock, "\n",
-			"With a value of:", price))
-
-	newMoney.Topic = "remove"
-	sendAccountLog(&newMoney, current_user_doc.Balance)
-
-	current_user_doc.Backup(s)
-	return err
 }
 
 // we return a function so that we can block during the subscribing process
@@ -304,16 +176,7 @@ func dial(url string) (*amqp.Connection, error) {
 }
 
 func main() {
-	// Determine if we should use local host
-	var host string
-	if len(os.Args) > 1 {
-		host = "localhost"
-		// Disable logging by default
-		fmt.Println("WARNING! HOST SET AS LOCALHOST")
-	} else {
-		host = "10.9.0.7"
-		fmt.Println("HOST FOR WORKER SET AS " + host)
-	}
+
 	// Disable printing logs
 	log.SetOutput(ioutil.Discard)
 
@@ -321,6 +184,7 @@ func main() {
 	conn, err := dial("amqp://guest:guest@" + rabbitmqHOST + ":5672/")
 	failOnError(err, "Failed to connect to RabbitMQ")
 	defer conn.Close()
+
 	q, ch := setupListeners(conn)
 	defer ch.Close()
 
@@ -353,6 +217,8 @@ func main() {
 
 	// Stores pending Buy and Sells in redis for us
 	pendingTransactions := NewTransactionStore()
+	defer pendingTransactions.ShutDown()
+
 	users := NewUserStore()
 	defer users.Disconnect()
 

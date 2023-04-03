@@ -35,6 +35,9 @@ type TransactionStore struct {
 	ctx context.Context
 }
 
+func (t *TransactionStore) ShutDown() {
+	t.rdb.Close()
+}
 func NewTransactionStore() *TransactionStore {
 	return &TransactionStore{setupRedis(), context.Background()}
 

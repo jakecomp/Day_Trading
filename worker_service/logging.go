@@ -8,6 +8,38 @@ import (
 	"net/http"
 )
 
+// Logs User Commands
+func startCommandLogger(mb *MessageBus) {
+	notes := []CommandType{
+		notifyADD,
+		notifyBUY,
+		notifySELL,
+		notifyCOMMIT_BUY,
+		notifyCOMMIT_SELL,
+		notifyCANCEL_BUY,
+		notifyCANCEL_SELL,
+	}
+
+	nch := make(chan Notification)
+
+	for _, n := range notes {
+		val := n
+		c := mb.SubscribeAll(val)
+		go func() {
+			// Logs all incoming commands
+			for {
+				r := <-c
+				nch <- r
+			}
+		}()
+	}
+	go func() {
+		for {
+			sendUserLog(<-nch)
+		}
+	}()
+}
+
 // User command logs
 func sendUserLog(n Notification) {
 	var u user_log
