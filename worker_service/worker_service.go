@@ -1,14 +1,10 @@
 package main
 
 import (
-	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	redis "github.com/redis/go-redis/v9"
 	"github.com/streadway/amqp"
-	"go.mongodb.org/mongo-driver/mongo"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -27,250 +23,106 @@ const (
 	logHOST             = "10.9.0.9"
 )
 
-func setupRedis() *redis.Client {
-	client := redis.NewClient(&redis.Options{
-		DB:       0,
-		Password: "",
-		Addr:     redisHOST + ":6379",
-	})
-	return client
-}
-
-func (i *Notification) MarshalBinary() ([]byte, error) {
-	return json.Marshal(i)
-}
-
-func (b *Notification) Pending(client *redis.Client) error {
-	ctx := context.Background()
-	err := client.Set(ctx, b.Userid+"#"+b.Topic, b, 60*time.Second).Err()
-	return err
-}
-
-func lastPending(userid string, topic string, client *redis.Client) (*Notification, error) {
-
-	ctx := context.Background()
-	val, err := client.GetDel(ctx, userid+"#"+topic).Bytes()
-	if err != nil {
-		return nil, err
-	}
-
-	var n Notification
-	err = json.Unmarshal(val, &n)
-	return &n, err
-
-}
-
-type userid string
+type UserId string
 type Args []string
-type user_log struct {
-	Username     string   `xml:"username" json:"username"`
-	Funds        string   `xml:"funds" json:"funds"`
-	Ticketnumber int      `xml:"ticketnumber" json:"ticketnumber"`
-	Command      []string `xml:"command,attr" json:"command"`
-}
 
-type system_log struct {
-	Username     string   `xml:"username" json:"username"`
-	Funds        string   `xml:"funds" json:"funds"`
-	Ticketnumber int      `xml:"ticketnumber" json:"ticketnumber"`
-	Command      []string `xml:"command,attr" json:"command"`
-}
-
-type account_log struct {
-	Username     string   `xml:"username" json:"username"`
-	Funds        string   `xml:"funds" json:"funds"`
-	Ticketnumber int      `xml:"ticketnumber" json:"ticketnumber"`
-	Action       []string `xml:"action,attr" json:"action"`
-}
-
-// Used for errors and debugging
-type debugEvent struct {
-	Timestamp    int64
-	ServerName   string   `json:"server"`
-	Ticketnumber int64    `json:"ticketnumber"`
-	Command      []string `json:"command"`
-	Username     string   `json:"username"`
-	DebugMessage string   `json:"message"`
-}
 type Command struct {
 	Ticket  int
-	Command string
+	Command CommandType
 	Args    Args
 }
 
-type Message struct {
-	Command string
-	Data    *Command
-}
 type Stock struct {
 	Name  string  `json:"stock"`
 	Price float64 `json:"price"`
 }
 
-type User struct {
-	Balance float64
-	Stocks  map[string]*StockQuantity
-}
-
-func NewUser() *User {
-	return &User{
-		Balance: float64(0),
-		Stocks:  make(map[string]*StockQuantity, 0),
-	}
-}
-
-// Internal DB of user state
-// var users map[userid]*User
-
 // Dispatch commands based on the command string given
 func dispatch(cmd Command) (CMD, error) {
 	log.Println("in dispatch command is ", cmd.Command, cmd.Args)
-	funcLookup := map[string]func(Command) (CMD, error){
+	funcLookup := map[CommandType]func(Command) (CMD, error){
 		notifyADD: func(cmd Command) (CMD, error) {
 			a, err := strconv.ParseFloat(cmd.Args[1], 64)
-			return ADD{ticket: int64(cmd.Ticket), userId: cmd.Args[0], amount: a}, err
+			return ADD{ticket: int64(cmd.Ticket), userId: UserId(cmd.Args[0]), amount: a}, err
 		},
 		notifyBUY: func(cmd Command) (CMD, error) {
 			a, err := strconv.ParseFloat(cmd.Args[2], 64)
-			return BUY{ticket: int64(cmd.Ticket), userId: cmd.Args[0], stock: cmd.Args[1], amount: a}, err
+			return BUY{ticket: int64(cmd.Ticket), userId: UserId(cmd.Args[0]), stock: cmd.Args[1], amount: a}, err
 		},
 		notifyCOMMIT_BUY: func(cmd Command) (CMD, error) {
-			return &COMMIT_BUY{ticket: int64(cmd.Ticket), userId: cmd.Args[0]}, nil
+			return &COMMIT_BUY{ticket: int64(cmd.Ticket), userId: UserId(cmd.Args[0])}, nil
 		},
 		notifyCANCEL_BUY: func(cmd Command) (CMD, error) {
-			return &CANCEL_BUY{ticket: int64(cmd.Ticket), userId: cmd.Args[0]}, nil
+			return &CANCEL_BUY{ticket: int64(cmd.Ticket), userId: UserId(cmd.Args[0])}, nil
 		},
 		notifySELL: func(cmd Command) (CMD, error) {
 			a, err := strconv.ParseFloat(cmd.Args[2], 64)
-			return SELL{ticket: int64(cmd.Ticket), userId: cmd.Args[0], stock: cmd.Args[1], amount: a}, err
+			return SELL{ticket: int64(cmd.Ticket), userId: UserId(cmd.Args[0]), stock: cmd.Args[1], amount: a}, err
 		},
 		notifyCOMMIT_SELL: func(cmd Command) (CMD, error) {
-			return &COMMIT_SELL{ticket: int64(cmd.Ticket), userId: cmd.Args[0]}, nil
+			return &COMMIT_SELL{ticket: int64(cmd.Ticket), userId: UserId(cmd.Args[0])}, nil
 		},
 		notifyCANCEL_SELL: func(cmd Command) (CMD, error) {
-			return &CANCEL_SELL{ticket: int64(cmd.Ticket), userId: cmd.Args[0]}, nil
+			return &CANCEL_SELL{ticket: int64(cmd.Ticket), userId: UserId(cmd.Args[0])}, nil
 		},
 		notifyFORCE_BUY: func(cmd Command) (CMD, error) {
 			a, err := strconv.ParseFloat(cmd.Args[2], 64)
-			return &FORCE_BUY{ticket: int64(cmd.Ticket), userId: cmd.Args[0], stock: cmd.Args[1], amount: a}, err
+			return &FORCE_BUY{ticket: int64(cmd.Ticket), userId: UserId(cmd.Args[0]), stock: cmd.Args[1], amount: a}, err
 		},
 		notifyFORCE_SELL: func(cmd Command) (CMD, error) {
 			a, err := strconv.ParseFloat(cmd.Args[2], 64)
-			return &FORCE_SELL{ticket: int64(cmd.Ticket), userId: cmd.Args[0], stock: cmd.Args[1], amount: a}, err
+			return &FORCE_SELL{ticket: int64(cmd.Ticket), userId: UserId(cmd.Args[0]), stock: cmd.Args[1], amount: a}, err
 		},
 	}
 	f := funcLookup[cmd.Command]
 	if f == nil {
-		return nil, errors.New("Undefinined command" + cmd.Command)
+		return nil, errors.New("Undefinined command" + string(cmd.Command))
 	}
 	return funcLookup[cmd.Command](cmd)
 }
 
-// TODO avoid this blocking for to avoid unnecssecary blocking on main thread
 func getNextCommand(resp amqp.Delivery) (*[]Command, error) {
 	// Attempt Dequeue
 
 	var cmd []Command
 	err := json.Unmarshal(resp.Body, &cmd)
-	// log.Println("we got", cmd)
 	return &cmd, err
 }
 
-// Used for logging anything related to a users account
-func sendAccountLog(n *Notification, bal float32) {
-	a := account_log{
-		Username: n.Userid,
-		// Funds:        fmt.Sprint(bal),
-		Funds:        fmt.Sprint(*n.Amount),
-		Ticketnumber: int(n.Ticket),
-		Action:       []string{n.Topic},
-	}
-
-	ulog, _ := json.Marshal(a)
-	bodyReader := bytes.NewReader(ulog)
-	_, err := http.Post("http://"+logHOST+":8004/accountlog", "application/json", bodyReader)
-	if err != nil {
-		log.Println(err)
-	}
-}
-
-// User command logs
-func sendUserLog(n Notification) {
-	var u user_log
-	if n.Amount == nil {
-		u = user_log{
-			Username:     n.Userid,
-			Ticketnumber: int(n.Ticket),
-			Command:      []string{n.Topic},
-		}
-
-	} else {
-		u = user_log{
-			Username:     n.Userid,
-			Funds:        fmt.Sprint(*n.Amount),
-			Ticketnumber: int(n.Ticket),
-			Command:      []string{n.Topic},
-		}
-	}
-	ulog, _ := json.Marshal(u)
-	bodyReader := bytes.NewReader(ulog)
-	_, err := http.Post("http://"+logHOST+":8004/userlog", "application/json", bodyReader)
-	if err != nil {
-		log.Println(err)
-	}
-}
-
-func sendErrorLog(ticket int64, msg string) {
-	ulog, _ := json.Marshal(debugEvent{
-		ServerName:   "worker",
-		Ticketnumber: ticket,
-		DebugMessage: msg,
-	})
-	bodyReader := bytes.NewReader(ulog)
-	_, err := http.Post("http://"+logHOST+":8004/errorlog", "application/json", bodyReader)
-	if err != nil {
-		log.Println(err)
-	}
-}
-
-func sendDebugLog(ticket int64, msg string) {
-	if DEBUG {
-		ulog, _ := json.Marshal(debugEvent{
-			ServerName:   "worker",
-			Ticketnumber: ticket,
-			DebugMessage: msg,
-		})
-		bodyReader := bytes.NewReader(ulog)
-		log.Println(string(ulog))
-		_, err := http.Post("http://"+logHOST+":8004/debuglog", "application/json", bodyReader)
-		if err != nil {
-			log.Println(err)
-		}
-
-	}
-}
-
 // Logs incomming commands
-func commandLogger(nch <-chan Notification) {
-	for {
-		sendUserLog(<-nch)
+func startCommandLogger(mb *MessageBus) {
+	notes := []CommandType{
+		notifyADD,
+		notifyBUY,
+		notifySELL,
+		notifyCOMMIT_BUY,
+		notifyCOMMIT_SELL,
+		notifyCANCEL_BUY,
+		notifyCANCEL_SELL,
 	}
+
+	nch := make(chan Notification)
+
+	for _, n := range notes {
+		val := n
+		c := mb.SubscribeAll(val)
+		go func() {
+			// Logs all incoming commands
+			for {
+				r := <-c
+				nch <- r
+			}
+		}()
+	}
+	go func() {
+		for {
+			sendUserLog(<-nch)
+		}
+	}()
 }
 
-type StockQuantity struct {
-	StockName string
-	Quantity  int64
-}
-
-func addMoney(newMoney Notification, db *mongo.Client, ctx *context.Context) error {
-	uid := userid(newMoney.Userid)
-
-	current_user_doc, err := read_db(string(uid), true, db, *ctx)
-
-	if current_user_doc == nil {
-		db, ctx := connect()
-		current_user_doc, err = read_db(string(uid), true, db, ctx)
-	}
+func addMoney(newMoney Notification, s *UserStore) error {
+	current_user_doc, err := newMoney.ReadUser(s)
 
 	sendDebugLog(int64(newMoney.Ticket),
 		fmt.Sprint("user doc before adding money\n",
@@ -287,19 +139,12 @@ func addMoney(newMoney Notification, db *mongo.Client, ctx *context.Context) err
 			current_user_doc, "for notification\n",
 			newMoney))
 
-	update_db(current_user_doc, db, *ctx)
+	current_user_doc.Backup(s)
 	return err
 }
 
-func sellStock(price float64, newMoney Notification, db *mongo.Client, ctx *context.Context) error {
-	uid := userid(newMoney.Userid)
-
-	current_user_doc, err := read_db(string(uid), false, db, *ctx)
-
-	if current_user_doc == nil {
-		db, ctx := connect()
-		current_user_doc, err = read_db(string(uid), false, db, ctx)
-	}
+func sellStock(price float64, newMoney Notification, s *UserStore) error {
+	current_user_doc, err := newMoney.ReadUser(s)
 
 	if err != nil {
 		return err
@@ -327,22 +172,12 @@ func sellStock(price float64, newMoney Notification, db *mongo.Client, ctx *cont
 		current_user_doc, "for notification\n",
 		newMoney))
 
-	update_db(current_user_doc, db, *ctx)
+	current_user_doc.Backup(s)
 	return nil
 }
 
-func lookupUser(uid userid, db *mongo.Client, ctx *context.Context) (*user_doc, error) {
-	return read_db(string(uid), false, db, *ctx)
-}
-func buyStock(price float64, newMoney Notification, db *mongo.Client, ctx *context.Context) error {
-	uid := userid(newMoney.Userid)
-
-	current_user_doc, err := read_db(string(uid), false, db, *ctx)
-
-	if current_user_doc == nil {
-		db, ctx := connect()
-		current_user_doc, err = read_db(string(uid), false, db, ctx)
-	}
+func buyStock(price float64, newMoney Notification, s *UserStore) error {
+	current_user_doc, err := newMoney.ReadUser(s)
 
 	if err != nil {
 		return err
@@ -376,7 +211,7 @@ func buyStock(price float64, newMoney Notification, db *mongo.Client, ctx *conte
 	newMoney.Topic = "remove"
 	sendAccountLog(&newMoney, current_user_doc.Balance)
 
-	update_db(current_user_doc, db, *ctx)
+	current_user_doc.Backup(s)
 	return err
 }
 
@@ -457,16 +292,17 @@ func setupListeners(conn *amqp.Connection) (amqp.Queue, *amqp.Channel) {
 	failOnError(err, "Failed to declare a queue")
 	return q, ch
 }
+
 func dial(url string) (*amqp.Connection, error) {
 	for {
-		conn, err := amqp.Dial("amqp://guest:guest@10.9.0.10:5672/")
+		conn, err := amqp.Dial("amqp://guest:guest@" + rabbitmqHOST + ":5672/")
 		if err == nil {
 			return conn, err
 		}
 		time.Sleep(time.Second * 3)
 	}
-
 }
+
 func main() {
 	// Determine if we should use local host
 	var host string
@@ -478,6 +314,7 @@ func main() {
 		host = "10.9.0.7"
 		fmt.Println("HOST FOR WORKER SET AS " + host)
 	}
+	// Disable printing logs
 	log.SetOutput(ioutil.Discard)
 
 	// Connect to RabbitMQ server
@@ -486,8 +323,6 @@ func main() {
 	defer conn.Close()
 	q, ch := setupListeners(conn)
 	defer ch.Close()
-	rdb := setupRedis()
-	defer rdb.Close()
 
 	// Consume messages from the queue
 	msgs, err := ch.Consume(
@@ -507,55 +342,39 @@ func main() {
 	// Monitor the current stock value
 	// go stockMonitor(mb)
 	// Log the new command
-	notes := []string{
-		notifyADD,
-		notifyBUY,
-		notifySELL,
-		notifyCOMMIT_BUY,
-		notifyCOMMIT_SELL,
-		notifyCANCEL_BUY,
-		notifyCANCEL_SELL,
-	}
-	nch := make(chan Notification)
-	go commandLogger(nch)
 
-	for _, n := range notes {
-		val := n
-		c := mb.SubscribeAll(val)
-		go func() {
-			// Logs all incoming commands
-			for {
-				r := <-c
-				nch <- r
-			}
-		}()
-	}
+	// Setup For Logging User Commands
+	startCommandLogger(mb)
 
-	waitChan := make(chan struct{}, MAX_CONCURRENT_JOBS)
-	// taskChan := make(chan CMD, MAX_CONCURRENT_JOBS)
-
-	db, ctx := connect()
-	defer db.Disconnect(ctx)
-	stock_pricer := &StockPricer{
+	// Used for tracking the last seen price of a stock
+	stock_pricer := &StockPricer{ // Maybe replace with redis?
 		prices: make(map[string]Stock),
 	}
+
+	// Stores pending Buy and Sells in redis for us
+	pendingTransactions := NewTransactionStore()
+	users := NewUserStore()
+	defer users.Disconnect()
+
+	limitThreadCount := make(chan struct{}, MAX_CONCURRENT_JOBS)
+
 	for {
 		select {
 		case next := <-msgs:
 			nextUser, err := getNextCommand(next)
 			if err == nil {
-				waitChan <- struct{}{}
+				limitThreadCount <- struct{}{}
 				go func(cmds []Command) {
 					for _, t := range cmds {
 						cmd, err := dispatch(t)
 						if err == nil {
 							// Execute this new command
-							Run(cmd, mb, rdb, db, ctx, stock_pricer)
+							Run(cmd, mb, pendingTransactions, users, stock_pricer)
 						} else {
 							sendErrorLog(int64(t.Ticket), fmt.Sprint("ERROR:", err))
 						}
 					}
-					<-waitChan
+					<-limitThreadCount
 				}(*nextUser)
 
 			}
