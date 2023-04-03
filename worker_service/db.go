@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -98,6 +99,29 @@ func NewUserStore() *UserStore {
 	return &UserStore{db, ctx}
 }
 
+func (u *UserStore) Execute(t func(context.Context) error) error {
+	transactionError := u.db.UseSession(context.TODO(), func(sessionContext mongo.SessionContext) error {
+		err := sessionContext.StartTransaction()
+		if err != nil {
+			return err
+		}
+
+		err = t(sessionContext)
+		if err != nil {
+			sessionContext.AbortTransaction(context.TODO())
+			return err
+		}
+
+		err = sessionContext.CommitTransaction(context.TODO())
+		return err
+	})
+
+	if transactionError != nil {
+		transactionError = errors.New("ERROR: Failed Transaction with error " + transactionError.Error())
+	}
+	return transactionError
+}
+
 func (n *Notification) ReadUser(s *UserStore) (user_collection *user_doc, err error) {
 
 	if s.db == nil {
@@ -134,7 +158,7 @@ func (n *Notification) ReadUser(s *UserStore) (user_collection *user_doc, err er
 	return &result, nil
 }
 
-func (u *user_doc) Backup(s *UserStore) {
+func (u *user_doc) Backup(s *UserStore) error {
 	if s.db == nil {
 		s.db, s.ctx = connect()
 	}
@@ -146,9 +170,9 @@ func (u *user_doc) Backup(s *UserStore) {
 
 	if err != nil {
 		fmt.Println("Error inserting into db: ", err)
-		panic(err)
+		return err
 	}
-
+	return err
 }
 func (us *UserStore) Disconnect() {
 	us.db.Disconnect(us.ctx)
