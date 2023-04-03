@@ -52,6 +52,17 @@ type StockPricer struct {
 	lock   sync.RWMutex
 }
 
+func (s *StockPricer) setPrice(stock Stock) {
+	// We use RLock here to allow for concurrent reads so long as
+	// Lock has not been used. This prevents reading during writs
+	// Fallback if we still don't have a stock price
+	s.lock.Lock()
+	s.prices[stock.Name] = stock
+	s.lock.Unlock()
+
+	log.Println("new stock added for ", stock.Name, " at price ", stock.Price)
+}
+
 func (s *StockPricer) lookupPrice(stock string, ticket int64) Stock {
 	// We use RLock here to allow for concurrent reads so long as
 	// Lock has not been used. This prevents reading during writs
