@@ -216,7 +216,7 @@ func socketReader(conn *websocket.Conn) {
 		for _, cmd := range cmds {
 			// Check if should queue item
 			if cmd.Command == "DUMPLOG" {
-				fmt.Printf("DUMPLOG FOUND")
+				fmt.Printf("DUMPLOG FOUND\n")
 				//_, err := http.Post("http://10.9.0.9:8004/userlog", "application/json", "")
 				//if err != nil {
 				//	log.Fatal(err)
@@ -270,8 +270,6 @@ func socketReader(conn *websocket.Conn) {
 				)
 				println(" [x] Sent Trigger %s", msg)
 				failOnError(err, "Failed to publish a message")
-			} else {
-				fmt.Printf("Received Unknown Command: %s\n", cmd.Command)
 			}
 		}
 		// This Should return success or failure eventually

@@ -102,13 +102,13 @@ func push_trigger(user_id string, current_price float64, current_triger Trigger,
 	// NEED TO FIGURE OUT HOW TO CREATE COMMAND PROPERLY
 	string_amount := fmt.Sprintf("%f", current_triger.Amount)
 	string_price := fmt.Sprintf("%f", current_price)
-	cmd := &Command{0, queue_name, []string{user_id, current_triger.Stock, string_amount, string_price}}
+	cmd := Command{0, queue_name, []string{user_id, current_triger.Stock, string_amount, string_price}}
 
-	println("Trigger is %s", cmd)
+	fmt.Printf("Trigger is %s", cmd.Command)
 
 	// CONVERT COMMAND TO BYTES ARRAY
 	command_bytes := new(bytes.Buffer)
-	json.NewEncoder(command_bytes).Encode(cmd)
+	json.NewEncoder(command_bytes).Encode([]Command{cmd})
 
 	err_3 := rabbitChannel.Publish(
 		"",       // name
