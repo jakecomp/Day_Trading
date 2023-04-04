@@ -8,125 +8,111 @@ package main
 // TODO assert timeframe for commit and cancel commands
 import (
 	"context"
+	// "encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"reflect"
-	"sync"
 	"time"
 
 	redis "github.com/redis/go-redis/v9"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-var db *mongo.Client
+type CommandType string
 
-const database = "day_trading"
-
-func connect() (*mongo.Client, context.Context) {
-	clientOptions := options.Client()
-	clientOptions.ApplyURI("mongodb://admin:admin@10.9.0.3:27017")
-	// clientOptions.ApplyURI("mongodb://admin:admin@localhost:27017")
-	ctx, _ := context.WithTimeout(context.Background(), 1*time.Hour)
-	client, err := mongo.Connect(ctx, clientOptions)
-
-	if err != nil {
-		fmt.Println("Error connecting to DB")
-		panic(err)
-	}
-	return client, ctx
-}
-
-type user_doc struct {
-	Username string
-	Hash     string
-	Balance  float32
-	Stonks   map[string]float64
-}
-
-type quote struct {
-	Stock string  `json:"stock"`
-	Price float64 `json:"price"`
-}
+const (
+	notifyADD         CommandType = "ADD"
+	notifyBUY                     = "BUY"
+	notifySELL                    = "SELL"
+	notifyCOMMIT_BUY              = "COMMIT_BUY"
+	notifyCOMMIT_SELL             = "COMMIT_SELL"
+	notifyCANCEL_BUY              = "CANCEL_BUY"
+	notifyCANCEL_SELL             = "CANCEL_SELL"
+	notifyFORCE_BUY               = "FORCE_BUY"
+	notifyFORCE_SELL              = "FORCE_SELL"
+	notifySTOCK_PRICE             = "STOCK_PRICE"
+)
 
 type Transaction struct {
 	Transaction_id int64
-	User_id        string
-	Command        string
+	User_id        UserId
+	Command        CommandType
 	Stock_id       string
 	Stock_price    float64
 	Cash_value     float64
 }
 
 type CMD interface {
-	UserId() string
 	Notify() Notification
-	Prerequsite(*redis.Client) error
+	Prerequsite(t *TransactionStore) error
 	// Postrequsite(*MessageBus) error
 }
 
 type StockPricer struct {
-	prices map[string]Stock
-	lock   sync.RWMutex
+	// prices map[string]Stock
+	rdb *redis.Client
+	ctx context.Context
 }
 
-func (s *StockPricer) lookupPrice(stock string, ticket int64) Stock {
-	// We use RLock here to allow for concurrent reads so long as
-	// Lock has not been used. This prevents reading during writs
-	s.lock.RLock()
-	p, ok := s.prices[stock]
-	s.lock.RUnlock()
+func (s *StockPricer) setPrice(stock string, price float64) error {
+	return s.rdb.Set(
+		context.Background(),
+		"stock#"+stock,
+		price,
+		60*time.Second,
+	).Err()
+}
 
-	// Fallback if we still don't have a stock price
-	if !ok {
-		p = getQuote(stock)
-
-		s.lock.Lock()
-		s.prices[stock] = p
-		s.lock.Unlock()
-
-		sendDebugLog(int64(ticket),
-			fmt.Sprint("Had to look up stock manually for",
-				stock, "and got \n",
-				p.Name, "for ", p.Price))
+func (s *StockPricer) lookupPrice(stock string, ticket int64) (Stock, error) {
+	key := "stock#" + stock
+	price, err := s.rdb.Get(context.Background(), key).Float64()
+	if err == nil {
+		return Stock{
+			stock,
+			price,
+		}, nil
 	}
-	return p
-
+	if err != redis.Nil {
+		fmt.Print("ERROR: getting price from redis", err)
+		return Stock{}, err
+	}
+	stonkVal := getQuote(stock)
+	err = s.setPrice(stock, stonkVal.Price)
+	return stonkVal, err
 }
 
-func UserAccountManager(mb *MessageBus, notification Notification, db *mongo.Client, ctx context.Context, s *StockPricer) {
+func UserAccountManager(mb *MessageBus, notification Notification, us *UserStore, s *StockPricer) {
 	// Map storing all the currently known stock prices
 	var err error
-	last_ticket := -1
+
+	last_ticket := int(notification.Ticket)
+
 	switch notification.Topic {
-	// case t2price := <-stockPrice:
-	// 	stockPrices[*t2price.Stock] = Stock{*t2price.Stock, *t2price.Amount}
 	case notifyADD:
-		err = addMoney(notification, db, &ctx)
-		last_ticket = int(notification.Ticket)
+		err = addMoney(notification, us)
 	case notifyCOMMIT_SELL:
-		p := s.lookupPrice(*notification.Stock, notification.Ticket)
-		err = sellStock(p.Price, notification, db, &ctx)
-		last_ticket = int(notification.Ticket)
+		p, err := s.lookupPrice(*notification.Stock, notification.Ticket)
+		if err == nil {
+			err = sellStock(p.Price, notification, us)
+		}
 	case notifyCOMMIT_BUY:
-		p := s.lookupPrice(*notification.Stock, notification.Ticket)
+		p, err := s.lookupPrice(*notification.Stock, notification.Ticket)
 		// Fallback if we still don't have a stock prices
-		err = buyStock(p.Price, notification, db, &ctx)
-		last_ticket = int(notification.Ticket)
+		if err == nil {
+			err = buyStock(p.Price, notification, us)
+		}
 	case notifyFORCE_SELL:
 		// Fallback if we still don't have a stock price
-		p := s.lookupPrice(*notification.Stock, notification.Ticket)
-		err = sellStock(p.Price, notification, db, &ctx)
-		last_ticket = int(notification.Ticket)
+		p, err := s.lookupPrice(*notification.Stock, notification.Ticket)
+		if err == nil {
+			err = sellStock(p.Price, notification, us)
+		}
 	case notifyFORCE_BUY:
-		p := s.lookupPrice(*notification.Stock, notification.Ticket)
+		p, err := s.lookupPrice(*notification.Stock, notification.Ticket)
+		if err == nil {
+			err = buyStock(p.Price, notification, us)
+		}
 		// Fallback if we still don't have a stock price
-		err = buyStock(p.Price, notification, db, &ctx)
-		last_ticket = int(notification.Ticket)
-		// default:
-
 	}
 
 	if err != nil {
@@ -134,12 +120,140 @@ func UserAccountManager(mb *MessageBus, notification Notification, db *mongo.Cli
 	}
 }
 
+func addMoney(newMoney Notification, s *UserStore) error {
+	var current_user_doc *user_doc
+	var err error
+	err = s.Execute(func(context.Context) error {
+		current_user_doc, err = newMoney.ReadUser(s)
+		if err != nil {
+			return err
+		}
+		sendDebugLog(int64(newMoney.Ticket),
+			fmt.Sprint("user doc before adding money\n",
+				current_user_doc, "for notification\n",
+				newMoney))
+
+		current_user_doc.Balance += float32(*newMoney.Amount)
+		err = current_user_doc.Backup(s)
+		return err
+	})
+
+	if err != nil {
+		return err
+	}
+
+	newMoney.Topic = "add"
+	sendAccountLog(&newMoney, current_user_doc.Balance)
+
+	sendDebugLog(int64(newMoney.Ticket),
+		fmt.Sprint("user doc after adding money\n",
+			current_user_doc, "for notification\n",
+			newMoney))
+	return err
+
+}
+
+func sellStock(price float64, newMoney Notification, s *UserStore) error {
+	stocksSold := *newMoney.Amount / price
+	var current_user_doc *user_doc
+	var err error
+
+	err = s.Execute(func(context.Context) error {
+		current_user_doc, err = newMoney.ReadUser(s)
+
+		if err != nil {
+			return err
+		}
+		stock_owned, ok := current_user_doc.Stonks[*newMoney.Stock]
+		if !ok || stock_owned <= 0 {
+			return errors.New(fmt.Sprint("ERROR: less than 0 stock available", *newMoney.Stock, *newMoney.Stock, " for price ", price))
+		}
+
+		sendDebugLog(int64(newMoney.Ticket),
+			fmt.Sprint("user doc before sale money\n",
+				current_user_doc, "for notification\n",
+				newMoney))
+
+		current_user_doc.Balance += float32(*newMoney.Amount)
+		current_user_doc.Stonks[*newMoney.Stock] -= stocksSold
+		if current_user_doc.Stonks[*newMoney.Stock] < 0 {
+			return errors.New(fmt.Sprint("Negative amount of ", *newMoney.Stock, " owned by ", current_user_doc.Username, " is not allowed during sale of ", *newMoney.Stock, " for price ", price))
+		}
+
+		err = current_user_doc.Backup(s)
+		return err
+	})
+
+	if err != nil {
+		return err
+	}
+
+	sendDebugLog(int64(newMoney.Ticket), fmt.Sprint("user doc after sale money\n",
+		current_user_doc, "for notification\n",
+		newMoney))
+	newMoney.Topic = "add"
+	sendAccountLog(&newMoney, current_user_doc.Balance)
+
+	return err
+}
+
+func buyStock(price float64, newStock Notification, s *UserStore) error {
+	stocksPurchased := *newStock.Amount / price
+	var current_user_doc *user_doc
+	var err error
+
+	err = s.Execute(func(context.Context) error {
+		current_user_doc, err = newStock.ReadUser(s)
+
+		if err != nil {
+			return err
+		}
+
+		sendDebugLog(int64(newStock.Ticket),
+			fmt.Sprint("user doc before purchase money\n",
+				current_user_doc, "for notification\n",
+				newStock, " with buy amount ", *newStock.Amount, " of stock ", *newStock.Stock, "\n",
+				"With a value of:", price))
+
+		current_user_doc.Balance -= float32(*newStock.Amount)
+		if current_user_doc.Balance < 0 {
+			return errors.New(fmt.Sprint("Negative balance is not allowed during buy for ", *newStock.Stock, " for price ", price))
+		}
+
+		_, ok := current_user_doc.Stonks[*newStock.Stock]
+		if !ok {
+			current_user_doc.Stonks[*newStock.Stock] = stocksPurchased
+		} else {
+			current_user_doc.Stonks[*newStock.Stock] += stocksPurchased
+		}
+
+		err = current_user_doc.Backup(s)
+		return err
+	})
+
+	if err != nil {
+		return err
+	}
+
+	sendDebugLog(int64(newStock.Ticket),
+		fmt.Sprint("user doc after purchase money\n",
+			current_user_doc,
+			"for notification\n",
+			newStock,
+			" with buy amount ", *newStock.Amount, " of stock ", *newStock.Stock, "\n",
+			"With a value of:", price))
+
+	newStock.Topic = "remove"
+	sendAccountLog(&newStock, current_user_doc.Balance)
+	return err
+}
+
 // timout for a user
 // perticket
 // last active timestamp
-func Run(task CMD, m *MessageBus, rdb *redis.Client, db *mongo.Client, ctx context.Context, s *StockPricer) {
+func Run(task CMD, m *MessageBus, t *TransactionStore, us *UserStore, s *StockPricer) {
 	log.Println("Executing prereq for ", reflect.TypeOf(task), task)
-	err := task.Prerequsite(rdb)
+	err := task.Prerequsite(t)
 	if err != nil {
 		sendErrorLog(int64(task.Notify().Ticket), fmt.Sprint("ERROR:", err))
 		return
@@ -148,75 +262,8 @@ func Run(task CMD, m *MessageBus, rdb *redis.Client, db *mongo.Client, ctx conte
 	log.Println("Sending notification for ", reflect.TypeOf(task), task)
 
 	n := task.Notify()
-	UserAccountManager(m, n, db, ctx, s)
 	m.Publish(n.Topic, n)
-
-}
-
-const (
-	notifyADD         = "ADD"
-	notifyBUY         = "BUY"
-	notifySELL        = "SELL"
-	notifyCOMMIT_BUY  = "COMMIT_BUY"
-	notifyCOMMIT_SELL = "COMMIT_SELL"
-	notifyCANCEL_BUY  = "CANCEL_BUY"
-	notifyCANCEL_SELL = "CANCEL_SELL"
-	notifyFORCE_BUY   = "FORCE_BUY"
-	notifyFORCE_SELL  = "FORCE_SELL"
-	notifySTOCK_PRICE = "STOCK_PRICE"
-)
-
-func read_db(username string, add_command bool, db *mongo.Client, ctx context.Context) (user_collection *user_doc, err error) {
-
-	if db == nil {
-		db, ctx = connect()
-	}
-	var result user_doc
-	err = db.Database(database).Collection("users").FindOne(ctx, bson.D{{"username", username}}).Decode(&result)
-
-	if err != nil {
-		if err.Error() == "mongo: no documents in result" && add_command {
-
-			var new_doc = new(user_doc)
-			new_doc.Username = username
-			new_doc.Hash = "unsecure_this_user_never_made_account_via_backend"
-			new_doc.Balance = 0
-			new_doc.Stonks = make(map[string]float64)
-
-			collection := db.Database(database).Collection("users")
-			_, err = collection.InsertOne(context.TODO(), new_doc)
-
-			if err != nil {
-				fmt.Println("Error adding user to db: ", err)
-				panic(err)
-			}
-
-			//defer db.Disconnect(ctx)
-			return new_doc, nil
-
-		} else {
-			return nil, (err)
-		}
-
-	}
-	return &result, nil
-}
-
-func update_db(new_doc *user_doc, db *mongo.Client, ctx context.Context) {
-	if db == nil {
-		db, ctx = connect()
-	}
-
-	collection := db.Database(database).Collection("users")
-
-	selected_user := bson.M{"username": new_doc.Username}
-	updated_user := bson.M{"$set": bson.M{"balance": new_doc.Balance, "stonks": new_doc.Stonks}}
-	_, err := collection.UpdateOne(context.TODO(), selected_user, updated_user)
-
-	if err != nil {
-		fmt.Println("Error inserting into db: ", err)
-		panic(err)
-	}
+	UserAccountManager(m, n, us, s)
 }
 
 // Purpose:
@@ -236,38 +283,10 @@ func update_db(new_doc *user_doc, db *mongo.Client, ctx context.Context) {
 //	ADD,jsmith,200.00
 type ADD struct {
 	ticket int64
-	userId string
+	userId UserId
 	amount float64
 }
 
-func (a ADD) UserId() string {
-	return a.userId
-}
-func (a BUY) UserId() string {
-	return a.userId
-}
-func (a SELL) UserId() string {
-	return a.userId
-}
-func (a COMMIT_BUY) UserId() string {
-	return a.userId
-}
-func (a COMMIT_SELL) UserId() string {
-	return a.userId
-}
-func (a CANCEL_SELL) UserId() string {
-	return a.userId
-}
-func (a CANCEL_BUY) UserId() string {
-	return a.userId
-}
-func (a FORCE_BUY) UserId() string {
-	return a.userId
-}
-
-func (a FORCE_SELL) UserId() string {
-	return a.userId
-}
 func (a ADD) Notify() Notification {
 	return Notification{
 		Topic:     notifyADD,
@@ -281,7 +300,7 @@ func (a ADD) Notify() Notification {
 
 // lookup user balance
 // if invalid balance return an error describing this
-func (a ADD) Prerequsite(rdb *redis.Client) error {
+func (a ADD) Prerequsite(t *TransactionStore) error {
 	if a.amount < 0 {
 		return errors.New(fmt.Sprint("Attempt to add negative value ", a.amount, " to user ", a.userId))
 	}
@@ -322,19 +341,19 @@ func (a ADD) Postrequsite(mb *MessageBus) error {
 //	BUY,jsmith,ABC,200.00
 type BUY struct {
 	ticket int64
-	userId string
+	userId UserId
 	stock  string
 	amount float64
 }
 
 // lookup user balance
 // if invalid balance return an error describing this
-func (b BUY) Prerequsite(rdb *redis.Client) error {
+func (b BUY) Prerequsite(t *TransactionStore) error {
 	if b.amount < 0 {
 		return errors.New(fmt.Sprint("Attempt to buy a negative amount of ", b.stock, " that amount being ", b.amount, " for user ", b.userId))
 	}
 	n := b.Notify()
-	n.Pending(rdb)
+	n.Pending(t)
 	log.Println("set pending buy for ", b)
 	return nil
 }
@@ -377,12 +396,12 @@ func (b BUY) Notify() Notification {
 
 type COMMIT_BUY struct {
 	ticket int64
-	userId string
+	userId UserId
 	buy    Notification
 }
 
-func (b *COMMIT_BUY) Prerequsite(rdb *redis.Client) error {
-	n, err := lastPending(b.userId, notifyBUY, rdb)
+func (b *COMMIT_BUY) Prerequsite(t *TransactionStore) error {
+	n, err := t.lastPending(b.userId, notifyBUY)
 	if err != nil && err != redis.Nil {
 		log.Println(b, "failed to commit purchase")
 		return err
@@ -442,12 +461,12 @@ func (b COMMIT_BUY) Postrequsite(mb *MessageBus) error {
 //	CANCEL_BUY,jsmith
 type CANCEL_BUY struct {
 	ticket int64
-	userId string
+	userId UserId
 	buy    Notification
 }
 
-func (b *CANCEL_BUY) Prerequsite(rdb *redis.Client) error {
-	n, err := lastPending(b.userId, notifyBUY, rdb)
+func (b *CANCEL_BUY) Prerequsite(t *TransactionStore) error {
+	n, err := t.lastPending(b.userId, notifyBUY)
 	if err != nil && err != redis.Nil {
 		log.Println(b, "failed to canceled purchase")
 		return err
@@ -498,17 +517,17 @@ func (b CANCEL_BUY) Postrequsite(mb *MessageBus) error {
 //	SELL,jsmith,ABC,100.00
 type SELL struct {
 	ticket int64
-	userId string
+	userId UserId
 	stock  string
 	amount float64
 }
 
-func (s SELL) Prerequsite(rdb *redis.Client) error {
+func (s SELL) Prerequsite(t *TransactionStore) error {
 	if s.amount < 0 {
 		return errors.New(fmt.Sprint("Attempt to sell a negative amount of ", s.stock, " that amount being ", s.amount, " for user ", s.userId))
 	}
 	n := s.Notify()
-	n.Pending(rdb)
+	n.Pending(t)
 	log.Println("set pending sell for ", s)
 
 	return nil
@@ -548,12 +567,12 @@ func (s SELL) Notify() Notification {
 //	COMMIT_SELL,jsmith
 type COMMIT_SELL struct {
 	ticket int64
-	userId string
+	userId UserId
 	sell   Notification
 }
 
-func (s *COMMIT_SELL) Prerequsite(rdb *redis.Client) error {
-	n, err := lastPending(s.userId, notifySELL, rdb)
+func (s *COMMIT_SELL) Prerequsite(t *TransactionStore) error {
+	n, err := t.lastPending(s.userId, notifySELL)
 	if err != nil && err != redis.Nil {
 		return err
 	} else if n != nil && n.Userid == s.userId && n.Ticket < s.ticket {
@@ -611,12 +630,12 @@ func (b COMMIT_SELL) Postrequsite(mb *MessageBus) error {
 //	CANCEL_SELL,jsmith
 type CANCEL_SELL struct {
 	ticket int64
-	userId string
+	userId UserId
 	sell   Notification
 }
 
-func (s *CANCEL_SELL) Prerequsite(rdb *redis.Client) error {
-	n, err := lastPending(s.userId, notifySELL, rdb)
+func (s *CANCEL_SELL) Prerequsite(t *TransactionStore) error {
+	n, err := t.lastPending(s.userId, notifySELL)
 	if err != nil && err != redis.Nil {
 		log.Println(s, "failed to find a sale to cancel")
 		return err
@@ -670,12 +689,12 @@ func (b CANCEL_SELL) Postrequsite(mb *MessageBus) error {
 //	FORCE_BUY,jsmith,ABC,200.00
 type FORCE_BUY struct {
 	ticket int64
-	userId string
+	userId UserId
 	stock  string
 	amount float64
 }
 
-func (b *FORCE_BUY) Prerequsite(rdb *redis.Client) error {
+func (b *FORCE_BUY) Prerequsite(t *TransactionStore) error {
 	return nil
 }
 
@@ -727,12 +746,12 @@ func (b FORCE_BUY) Postrequsite(mb *MessageBus) error {
 //	FORCE_SELL,jsmith,ABC,200.00
 type FORCE_SELL struct {
 	ticket int64
-	userId string
+	userId UserId
 	stock  string
 	amount float64
 }
 
-func (b *FORCE_SELL) Prerequsite(rdb *redis.Client) error {
+func (b *FORCE_SELL) Prerequsite(t *TransactionStore) error {
 	return nil
 }
 
