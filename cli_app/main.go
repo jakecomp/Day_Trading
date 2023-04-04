@@ -6,15 +6,21 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gorilla/websocket"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
-
-	"github.com/gorilla/websocket"
 )
+
+type ByFirstCommand [][]Command
+
+func (a ByFirstCommand) Len() int           { return len(a) }
+func (a ByFirstCommand) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a ByFirstCommand) Less(i, j int) bool { return a[i][0].Ticket < a[j][0].Ticket }
 
 type Command struct {
 	Ticket  int
@@ -50,7 +56,6 @@ func parseCmds(r *bufio.Reader) chan []Command {
 	c := make(chan []Command, 500)
 	usercmds := make(map[string][]Command, 1000)
 	go func() {
-
 		for l, _, err := r.ReadLine(); err == nil; l, _, err = r.ReadLine() {
 			if err != nil {
 				fmt.Fprintln(os.Stderr, "Error reading input:", err)
@@ -63,7 +68,12 @@ func parseCmds(r *bufio.Reader) chan []Command {
 			}
 			usercmds[cmd.Args[0]] = append(usercmds[cmd.Args[0]], *cmd)
 		}
+		var users [][]Command
 		for _, value := range usercmds {
+			users = append(users, value)
+		}
+		sort.Sort(ByFirstCommand(users))
+		for _, value := range users {
 			c <- value
 		}
 		close(c)
@@ -131,14 +141,15 @@ func connectToSocket(tok token) *websocket.Conn {
 }
 
 func forwardCommands(cmdsPerUser chan []Command, c *websocket.Conn) {
+	var last Command
 	for cmds := range cmdsPerUser {
 		jcmd, err := json.Marshal(cmds)
 		if err != nil {
 			log.Println("failed during command marshelling ", err)
 		}
-		for _, cm := range cmds {
-			log.Println(cm)
-		}
+		// for _, cm := range cmds {
+		// 	log.Println(cm)
+		// }
 		err = c.WriteMessage(websocket.TextMessage, jcmd)
 		// mType, m, err := c.ReadMessage()
 		if err != nil {
@@ -147,7 +158,9 @@ func forwardCommands(cmdsPerUser chan []Command, c *websocket.Conn) {
 		// if mType == websocket.TextMessage {
 		// 	log.Println(string(m))
 		// }
+		last = cmds[len(cmds)-1]
 	}
+	fmt.Println(last)
 	c.Close()
 
 }
@@ -170,4 +183,5 @@ func main() {
 	c := connectToSocket(tok)
 	defer c.Close()
 	forwardCommands(cmds, c)
+	fmt.Println("Sent all commands")
 }
