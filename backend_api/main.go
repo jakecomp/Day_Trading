@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
@@ -66,7 +67,26 @@ type quote_log struct {
 	StockSymbol  string `xml:"stock_symbol" json:"stock_symbol"`
 }
 
-var stocks_map map[string]quote
+type StockHolder struct {
+	stocks map[string]quote
+	lock   sync.RWMutex
+}
+
+func (sh *StockHolder) GetStock(stock string) (quote, bool) {
+	sh.lock.RLock()
+	p, ok := sh.stocks[stock]
+	sh.lock.RUnlock()
+	return p, ok
+}
+func (sh *StockHolder) SetStock(stock string, q quote) {
+	sh.lock.Lock()
+	sh.stocks[stock] = q
+	sh.lock.Unlock()
+}
+
+var stocks_map = StockHolder{
+	stocks: make(map[string]quote),
+}
 
 func homePage(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Welcome to the HomePage!")
@@ -225,13 +245,14 @@ func socketReader(conn *websocket.Conn) {
 				// Get a quote
 				var new_quote quote
 				// DO WE KNOW THIS STOCK?
-				if _, ok := stocks_map[cmd.Args[1]]; !ok {
+				if _, ok := stocks_map.GetStock(cmd.Args[1]); !ok {
 					println("Stock is not in map, updating map...")
 					requestStockPrice(cmd.Args[1])
 				}
 
 				new_quote.Stock = cmd.Args[1]
-				new_quote.Price = stocks_map[new_quote.Stock].Price
+				tmp, _ := stocks_map.GetStock(new_quote.Stock)
+				new_quote.Price = tmp.Price
 
 				log := quote_log{
 					Timestamp:    time.Now().Unix(),
@@ -251,7 +272,7 @@ func socketReader(conn *websocket.Conn) {
 
 				if !stringInSlice(cmd.Command, []string{"CANCEL_BUY", "CANCEL_SELL"}) {
 					// DO WE KNOW THIS STOCK?
-					if _, ok := stocks_map[cmd.Args[1]]; !ok {
+					if _, ok := stocks_map.GetStock(cmd.Args[1]); !ok {
 						println("Stock is not in map, updating map...")
 						requestStockPrice(cmd.Args[1])
 					}
@@ -321,8 +342,6 @@ func main() {
 	defer db.Disconnect(ctx)
 
 	//log.SetOutput(ioutil.Discard)
-
-	stocks_map = make(map[string]quote)
 
 	// Connect to RabbitMQ server
 	time.Sleep(time.Second * 15)
