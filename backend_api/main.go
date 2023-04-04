@@ -66,7 +66,7 @@ type quote_log struct {
 	StockSymbol  string `xml:"stock_symbol" json:"stock_symbol"`
 }
 
-var stocks map[string]quote
+var stocks_map map[string]quote
 
 func homePage(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Welcome to the HomePage!")
@@ -207,7 +207,6 @@ func socketReader(conn *websocket.Conn) {
 			break
 		}
 
-<<<<<<< HEAD
 		err = json.Unmarshal(message, &cmds)
 		if err != nil {
 			fmt.Println("JSON: ", cmds[0])
@@ -223,100 +222,90 @@ func socketReader(conn *websocket.Conn) {
 				//	log.Fatal(err)
 				//}
 			} else if cmd.Command == "QUOTE" {
-
 				// Get a quote
-				allquote := make(map[string]quote)
-=======
-		err = json.Unmarshal(message, cmd)
-
-		// Check if should queue item
-		if cmd.Command == "DUMPLOG" {
-			fmt.Printf("DUMPLOG FOUND")
-			//_, err := http.Post("http://10.9.0.9:8004/userlog", "application/json", "")
-			//if err != nil {
-			//	log.Fatal(err)
-			//}
-		} else if cmd.Command == "QUOTE" {
-
-			// Get a quote
-			// var resp *http.Response
-			//allquote := make(map[string]quote)
-			if len(cmd.Args) == 2 {
->>>>>>> 1bb8b1a (Removed print statements, modified trigger service to accept tickets from queue, modified main.go to send triggers via queue)
-				var thisStock quote
-				resp, err := http.Get("http://10.9.0.6:8002/" + cmd.Args[1])
-				if resp.StatusCode != http.StatusOK {
-					fmt.Println("Error: Failed to get quote. ", err)
-
+				var new_quote quote
+				// DO WE KNOW THIS STOCK?
+				if _, ok := stocks_map[cmd.Args[1]]; !ok {
+					println("Stock is not in map, updating map...")
+					resp, err := http.Get("http://10.9.0.6:8002/" + cmd.Args[1])
+					if resp.StatusCode != http.StatusOK {
+						fmt.Println("Error: Failed to get quote. ", err)
+					}
+					json.NewDecoder(resp.Body).Decode(&new_quote)
+				} else {
+					new_quote.Stock = cmd.Args[1]
+					new_quote.Price = stocks_map[new_quote.Stock].Price
 				}
-				json.NewDecoder(resp.Body).Decode(&thisStock)
-				stocks[thisStock.Stock] = thisStock
+
 				log := quote_log{
 					Timestamp:    time.Now().Unix(),
 					Username:     cmd.Args[0],
 					Ticketnumber: cmd.Ticket,
-					Price:        fmt.Sprintf("%v", thisStock.Price),
-					StockSymbol:  thisStock.Stock,
+					Price:        fmt.Sprintf("%v", new_quote.Price),
+					StockSymbol:  new_quote.Stock,
 				}
 
 				log_bytes, err := json.Marshal(log)
 
-<<<<<<< HEAD
-				go http.Post("http://10.9.0.9:8004/quotelog", "application/json", bytes.NewBuffer(log_bytes))
-			}
-
-=======
 				_, err = http.Post("http://10.9.0.9:8004/quotelog", "application/json", bytes.NewBuffer(log_bytes))
 				if err != nil {
 					fmt.Println(err)
 				}
-			} else {
-				// TODO we need a way to log all quotes
-				resp, err := http.Get("http://10.9.0.6:8002/all")
-				if resp.StatusCode != http.StatusOK {
-					fmt.Println("Error: Failed to get quote. ", err)
+			} else if stringInSlice(cmd.Command, []string{"SET_BUY_AMOUNT", "SET_SELL_AMOUNT", "SET_BUY_TRIGGER", "SET_SELL_TRIGGER", "CANCEL_SET_BUY", "CANCEL_SET_SELL"}) {
 
+				// DO WE KNOW THIS STOCK?
+				if _, ok := stocks_map[cmd.Args[1]]; !ok {
+					println("Stock is not in map, updating map...")
+					resp, err := http.Get("http://10.9.0.6:8002/" + cmd.Args[1])
+					if resp.StatusCode != http.StatusOK {
+						fmt.Println("Error: Failed to get quote. ", err)
+					}
 				}
-				json.NewDecoder(resp.Body).Decode(&stocks)
+
+				msg, _ := json.Marshal(cmd)
+				err = queueServiceConn.Publish(
+					"",        // Exchange name
+					"trigger", // Queue name
+					false,     // Mandatory
+					false,     // Immediate
+					amqp.Publishing{
+						ContentType: "text/json",
+						Body:        []byte(msg),
+					},
+				)
+				println(" [x] Sent Trigger %s", msg)
+				failOnError(err, "Failed to publish a message")
+			} else {
+
+				// DO WE KNOW THIS STOCK?
+				if _, ok := stocks_map[cmd.Args[1]]; !ok {
+					println("Stock is not in map, updating map...")
+					resp, err := http.Get("http://10.9.0.6:8002/" + cmd.Args[1])
+					if resp.StatusCode != http.StatusOK {
+						fmt.Println("Error: Failed to get quote. ", err)
+					}
+				}
+
+				msg, _ := json.Marshal(cmd)
+				err = queueServiceConn.Publish(
+					"",         // Exchange name
+					queue.Name, // Queue name
+					false,      // Mandatory
+					false,      // Immediate
+					amqp.Publishing{
+						ContentType: "text/json",
+						Body:        []byte(msg),
+					},
+				)
+				log.Printf(" [x] Sent %s", msg)
+				failOnError(err, "Failed to publish a message")
 			}
 
-		} else if stringInSlice(cmd.Command, []string{"SET_BUY_AMOUNT", "SET_SELL_AMOUNT", "SET_BUY_TRIGGER", "SET_SELL_TRIGGER", "CANCEL_SET_BUY", "CANCEL_SET_SELL"}) {
-			msg, _ := json.Marshal(*cmd)
-			err = queueServiceConn.Publish(
-				"",        // Exchange name
-				"trigger", // Queue name
-				false,     // Mandatory
-				false,     // Immediate
-				amqp.Publishing{
-					ContentType: "text/json",
-					Body:        []byte(msg),
-				},
-			)
-			println(" [x] Sent Trigger %s", msg)
-			failOnError(err, "Failed to publish a message")
-		} else {
-			msg, _ := json.Marshal(*cmd)
-			err = queueServiceConn.Publish(
-				"",         // Exchange name
-				queue.Name, // Queue name
-				false,      // Mandatory
-				false,      // Immediate
-				amqp.Publishing{
-					ContentType: "text/json",
-					Body:        []byte(msg),
-				},
-			)
-			log.Printf(" [x] Sent %s", msg)
-			failOnError(err, "Failed to publish a message")
-
+			if err != nil {
+				fmt.Println("Error during message writing:", err)
+				break
+			}
 		}
-
-		if err != nil {
-			fmt.Println("Error during message writing:", err)
-			break
->>>>>>> 1bb8b1a (Removed print statements, modified trigger service to accept tickets from queue, modified main.go to send triggers via queue)
-		}
-
 		// This Should return success or failure eventually
 		// err = conn.WriteMessage(messageType, message)
 		if err != nil {
@@ -366,7 +355,7 @@ func main() {
 
 	//log.SetOutput(ioutil.Discard)
 
-	stocks = make(map[string]quote)
+	stocks_map = make(map[string]quote)
 
 	// Connect to RabbitMQ server
 	time.Sleep(time.Second * 15)
@@ -376,8 +365,73 @@ func main() {
 
 	queue, queueServiceConn = connectQueue(conn)
 	defer queueServiceConn.Close()
+
+	setupStockListener(queueServiceConn)
+
 	log.Println("RUNNING ON PORT 8000...")
 	handleRequests()
+}
+
+func setupStockListener(ch *amqp.Channel) {
+
+	err := ch.ExchangeDeclare(
+		"stock_prices", // name
+		"fanout",       // type
+		true,           // durable
+		false,          // auto-deleted
+		false,          // internal
+		false,          // no-wait
+		nil,            // arguments
+	)
+	if err != nil {
+		log.Println("Failed to declare an exchange")
+		panic(err)
+	}
+
+	q, err := ch.QueueDeclare(
+		"",    // name
+		false, // durable
+		false, // delete when unused
+		true,  // exclusive
+		false, // no-wait
+		nil,   // arguments
+	)
+	if err != nil {
+		log.Println("Failed to declare a queue")
+		panic(err)
+	}
+
+	// Bind our temperary queue to the global exchange (subscribe to stock prices)
+	err = ch.QueueBind(
+		q.Name,         // queue name
+		"",             // routing key
+		"stock_prices", // exchange
+		false,
+		nil,
+	)
+	if err != nil {
+		log.Println("Failed to bind a queue")
+		panic(err)
+	}
+	failOnError(err, "Failed to bind a queue")
+
+	msgs, err := ch.Consume(
+		q.Name, // queue
+		"",     // consumer
+		true,   // auto-ack
+		false,  // exclusive
+		false,  // no-local
+		false,  // no-wait
+		nil,    // args
+	)
+	failOnError(err, "Failed to register a consumer")
+
+	// This routine updates local map of stocks with the queuer that publishes every second
+	go func() {
+		for d := range msgs {
+			json.Unmarshal(d.Body, &stocks_map)
+		}
+	}()
 }
 
 func connect() (*mongo.Client, context.Context) {
