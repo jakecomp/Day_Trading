@@ -262,9 +262,8 @@ func Run(task CMD, m *MessageBus, t *TransactionStore, us *UserStore, s *StockPr
 	log.Println("Sending notification for ", reflect.TypeOf(task), task)
 
 	n := task.Notify()
-	UserAccountManager(m, n, us, s)
 	m.Publish(n.Topic, n)
-
+	UserAccountManager(m, n, us, s)
 }
 
 // Purpose:
