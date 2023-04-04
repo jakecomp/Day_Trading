@@ -212,9 +212,9 @@ func main() {
 
 	// Used for tracking the last seen price of a stock
 	stock_pricer := &StockPricer{ // Maybe replace with redis?
-		prices: make(map[string]Stock),
+		rdb: setupRedis(),
+		// prices: make(map[string]Stock),
 	}
-
 	// Stores pending Buy and Sells in redis for us
 	pendingTransactions := NewTransactionStore()
 	defer pendingTransactions.ShutDown()

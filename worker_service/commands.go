@@ -8,11 +8,11 @@ package main
 // TODO assert timeframe for commit and cancel commands
 import (
 	"context"
+	// "encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"reflect"
-	"sync"
 	"time"
 
 	redis "github.com/redis/go-redis/v9"
@@ -49,76 +49,70 @@ type CMD interface {
 }
 
 type StockPricer struct {
-	prices map[string]Stock
-	lock   sync.RWMutex
+	// prices map[string]Stock
+	rdb *redis.Client
+	ctx context.Context
 }
 
-func (s *StockPricer) setPrice(stock Stock) {
-	// We use RLock here to allow for concurrent reads so long as
-	// Lock has not been used. This prevents reading during writs
-	// Fallback if we still don't have a stock price
-	s.lock.Lock()
-	s.prices[stock.Name] = stock
-	s.lock.Unlock()
-
-	log.Println("new stock added for ", stock.Name, " at price ", stock.Price)
+func (s *StockPricer) setPrice(stock string, price float64) error {
+	return s.rdb.Set(
+		context.Background(),
+		"stock#"+stock,
+		price,
+		60*time.Second,
+	).Err()
 }
 
-func (s *StockPricer) lookupPrice(stock string, ticket int64) Stock {
-	// We use RLock here to allow for concurrent reads so long as
-	// Lock has not been used. This prevents reading during writs
-	s.lock.RLock()
-	p, ok := s.prices[stock]
-	s.lock.RUnlock()
-
-	// Fallback if we still don't have a stock price
-	if !ok {
-		p = getQuote(stock)
-
-		s.lock.Lock()
-		s.prices[stock] = p
-		s.lock.Unlock()
-
-		sendDebugLog(int64(ticket),
-			fmt.Sprint("Had to look up stock manually for",
-				stock, "and got \n",
-				p.Name, "for ", p.Price))
+func (s *StockPricer) lookupPrice(stock string, ticket int64) (Stock, error) {
+	key := "stock#" + stock
+	price, err := s.rdb.Get(context.Background(), key).Float64()
+	if err == nil {
+		return Stock{
+			stock,
+			price,
+		}, nil
 	}
-	return p
-
+	if err != redis.Nil {
+		fmt.Print("ERROR: getting price from redis", err)
+		return Stock{}, err
+	}
+	stonkVal := getQuote(stock)
+	err = s.setPrice(stock, stonkVal.Price)
+	return stonkVal, err
 }
 
 func UserAccountManager(mb *MessageBus, notification Notification, us *UserStore, s *StockPricer) {
 	// Map storing all the currently known stock prices
 	var err error
-	last_ticket := -1
+
+	last_ticket := int(notification.Ticket)
+
 	switch notification.Topic {
-	// case t2price := <-stockPrice:
-	// 	stockPrices[*t2price.Stock] = Stock{*t2price.Stock, *t2price.Amount}
 	case notifyADD:
 		err = addMoney(notification, us)
-		last_ticket = int(notification.Ticket)
 	case notifyCOMMIT_SELL:
-		p := s.lookupPrice(*notification.Stock, notification.Ticket)
-		err = sellStock(p.Price, notification, us)
-		last_ticket = int(notification.Ticket)
+		p, err := s.lookupPrice(*notification.Stock, notification.Ticket)
+		if err == nil {
+			err = sellStock(p.Price, notification, us)
+		}
 	case notifyCOMMIT_BUY:
-		p := s.lookupPrice(*notification.Stock, notification.Ticket)
+		p, err := s.lookupPrice(*notification.Stock, notification.Ticket)
 		// Fallback if we still don't have a stock prices
-		err = buyStock(p.Price, notification, us)
-		last_ticket = int(notification.Ticket)
+		if err == nil {
+			err = buyStock(p.Price, notification, us)
+		}
 	case notifyFORCE_SELL:
 		// Fallback if we still don't have a stock price
-		p := s.lookupPrice(*notification.Stock, notification.Ticket)
-		err = sellStock(p.Price, notification, us)
-		last_ticket = int(notification.Ticket)
+		p, err := s.lookupPrice(*notification.Stock, notification.Ticket)
+		if err == nil {
+			err = sellStock(p.Price, notification, us)
+		}
 	case notifyFORCE_BUY:
-		p := s.lookupPrice(*notification.Stock, notification.Ticket)
+		p, err := s.lookupPrice(*notification.Stock, notification.Ticket)
+		if err == nil {
+			err = buyStock(p.Price, notification, us)
+		}
 		// Fallback if we still don't have a stock price
-		err = buyStock(p.Price, notification, us)
-		last_ticket = int(notification.Ticket)
-		// default:
-
 	}
 
 	if err != nil {

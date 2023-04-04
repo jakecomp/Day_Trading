@@ -69,6 +69,9 @@ func (t TransactionStore) Store(uid UserId, topic CommandType, n *Notification) 
 func (i *Notification) MarshalBinary() ([]byte, error) {
 	return json.Marshal(i)
 }
+func (i *Stock) MarshalBinary() ([]byte, error) {
+	return json.Marshal(i)
+}
 
 // ===== mongo ====
 
