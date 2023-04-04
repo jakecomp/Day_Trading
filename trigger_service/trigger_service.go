@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gorilla/websocket"
 	"github.com/streadway/amqp"
 )
 
@@ -48,7 +47,6 @@ type UserTriggers struct {
 var userMap map[string]UserTriggers
 var stocks map[string]quote
 
-var upgrader = websocket.Upgrader{}
 var rabbitChannel *amqp.Channel
 var queue amqp.Queue
 

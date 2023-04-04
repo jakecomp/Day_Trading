@@ -21,7 +21,7 @@ import (
 
 var db *mongo.Client
 var ctx context.Context
-var queueServiceConn *amqp.Channel
+var rabbitChannel *amqp.Channel
 var queue amqp.Queue
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  0,
@@ -192,7 +192,7 @@ func socketReader(conn *websocket.Conn) {
 			break
 		}
 		// Pass the messages along to the Worker to keep the queue saturated
-		err = queueServiceConn.Publish(
+		err = rabbitChannel.Publish(
 			"",         // Exchange name
 			queue.Name, // Queue name
 			false,      // Mandatory
@@ -227,15 +227,11 @@ func socketReader(conn *websocket.Conn) {
 				// DO WE KNOW THIS STOCK?
 				if _, ok := stocks_map[cmd.Args[1]]; !ok {
 					println("Stock is not in map, updating map...")
-					resp, err := http.Get("http://10.9.0.6:8002/" + cmd.Args[1])
-					if resp.StatusCode != http.StatusOK {
-						fmt.Println("Error: Failed to get quote. ", err)
-					}
-					json.NewDecoder(resp.Body).Decode(&new_quote)
-				} else {
-					new_quote.Stock = cmd.Args[1]
-					new_quote.Price = stocks_map[new_quote.Stock].Price
+					requestStockPrice(cmd.Args[1])
 				}
+
+				new_quote.Stock = cmd.Args[1]
+				new_quote.Price = stocks_map[new_quote.Stock].Price
 
 				log := quote_log{
 					Timestamp:    time.Now().Unix(),
@@ -253,17 +249,16 @@ func socketReader(conn *websocket.Conn) {
 				}
 			} else if stringInSlice(cmd.Command, []string{"SET_BUY_AMOUNT", "SET_SELL_AMOUNT", "SET_BUY_TRIGGER", "SET_SELL_TRIGGER", "CANCEL_SET_BUY", "CANCEL_SET_SELL"}) {
 
-				// DO WE KNOW THIS STOCK?
-				if _, ok := stocks_map[cmd.Args[1]]; !ok {
-					println("Stock is not in map, updating map...")
-					resp, err := http.Get("http://10.9.0.6:8002/" + cmd.Args[1])
-					if resp.StatusCode != http.StatusOK {
-						fmt.Println("Error: Failed to get quote. ", err)
+				if !stringInSlice(cmd.Command, []string{"CANCEL_BUY", "CANCEL_SELL"}) {
+					// DO WE KNOW THIS STOCK?
+					if _, ok := stocks_map[cmd.Args[1]]; !ok {
+						println("Stock is not in map, updating map...")
+						requestStockPrice(cmd.Args[1])
 					}
 				}
 
 				msg, _ := json.Marshal(cmd)
-				err = queueServiceConn.Publish(
+				err = rabbitChannel.Publish(
 					"",        // Exchange name
 					"trigger", // Queue name
 					false,     // Mandatory
@@ -276,42 +271,15 @@ func socketReader(conn *websocket.Conn) {
 				println(" [x] Sent Trigger %s", msg)
 				failOnError(err, "Failed to publish a message")
 			} else {
-
-				// DO WE KNOW THIS STOCK?
-				if _, ok := stocks_map[cmd.Args[1]]; !ok {
-					println("Stock is not in map, updating map...")
-					resp, err := http.Get("http://10.9.0.6:8002/" + cmd.Args[1])
-					if resp.StatusCode != http.StatusOK {
-						fmt.Println("Error: Failed to get quote. ", err)
-					}
-				}
-
-				msg, _ := json.Marshal(cmd)
-				err = queueServiceConn.Publish(
-					"",         // Exchange name
-					queue.Name, // Queue name
-					false,      // Mandatory
-					false,      // Immediate
-					amqp.Publishing{
-						ContentType: "text/json",
-						Body:        []byte(msg),
-					},
-				)
-				log.Printf(" [x] Sent %s", msg)
-				failOnError(err, "Failed to publish a message")
-			}
-
-			if err != nil {
-				fmt.Println("Error during message writing:", err)
-				break
+				fmt.Printf("Received Unknown Command: %s\n", cmd.Command)
 			}
 		}
 		// This Should return success or failure eventually
 		// err = conn.WriteMessage(messageType, message)
-		if err != nil {
-			fmt.Println("Error during message writing:", err)
-			break
-		}
+		// if err != nil {
+		// 	fmt.Println("Error during message writing:", err)
+		// 	break
+		// }
 	}
 }
 
@@ -346,7 +314,6 @@ func dial(url string) (*amqp.Connection, error) {
 		// Rabbitmq is slow to start so we might have to wait on it
 		time.Sleep(time.Second * 3)
 	}
-
 }
 
 func main() {
@@ -363,18 +330,34 @@ func main() {
 	failOnError(err, "Failed to connect to RabbitMQ")
 	defer conn.Close()
 
-	queue, queueServiceConn = connectQueue(conn)
-	defer queueServiceConn.Close()
+	queue, rabbitChannel = connectQueue(conn)
+	defer rabbitChannel.Close()
 
-	setupStockListener(queueServiceConn)
+	setupStockListener()
 
 	log.Println("RUNNING ON PORT 8000...")
 	handleRequests()
 }
 
-func setupStockListener(ch *amqp.Channel) {
+func requestStockPrice(stock string) {
+	err := rabbitChannel.Publish(
+		"",               // name
+		"stock_requests", // routing key
+		false,            // mandatory
+		false,            // immediate
+		amqp.Publishing{
+			ContentType: "text/plain",
+			Body:        []byte(stock),
+		})
+	if err != nil {
+		log.Println(err)
+	}
+}
 
-	err := ch.ExchangeDeclare(
+func setupStockListener() {
+
+	// Queue for recieving stock prices
+	err := rabbitChannel.ExchangeDeclare(
 		"stock_prices", // name
 		"fanout",       // type
 		true,           // durable
@@ -387,8 +370,17 @@ func setupStockListener(ch *amqp.Channel) {
 		log.Println("Failed to declare an exchange")
 		panic(err)
 	}
+	// Queue for requesting stocks from queuer
+	_, err = rabbitChannel.QueueDeclare(
+		"stock_requests", // name
+		false,            // durable
+		false,            // delete when unused
+		false,            // exclusive
+		false,            // no-wait
+		nil,              // arguments
+	)
 
-	q, err := ch.QueueDeclare(
+	q, err := rabbitChannel.QueueDeclare(
 		"",    // name
 		false, // durable
 		false, // delete when unused
@@ -402,7 +394,7 @@ func setupStockListener(ch *amqp.Channel) {
 	}
 
 	// Bind our temperary queue to the global exchange (subscribe to stock prices)
-	err = ch.QueueBind(
+	err = rabbitChannel.QueueBind(
 		q.Name,         // queue name
 		"",             // routing key
 		"stock_prices", // exchange
@@ -415,7 +407,7 @@ func setupStockListener(ch *amqp.Channel) {
 	}
 	failOnError(err, "Failed to bind a queue")
 
-	msgs, err := ch.Consume(
+	msgs, err := rabbitChannel.Consume(
 		q.Name, // queue
 		"",     // consumer
 		true,   // auto-ack
