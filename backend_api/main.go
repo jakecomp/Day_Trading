@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
@@ -66,7 +67,8 @@ type quote_log struct {
 	StockSymbol  string `xml:"stock_symbol" json:"stock_symbol"`
 }
 
-var stocks_map map[string]quote
+var stocks map[string]quote
+var stocks_lock sync.Mutex
 
 func homePage(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Welcome to the HomePage!")
@@ -225,13 +227,15 @@ func socketReader(conn *websocket.Conn) {
 				// Get a quote
 				var new_quote quote
 				// DO WE KNOW THIS STOCK?
-				if _, ok := stocks_map[cmd.Args[1]]; !ok {
+				stocks_lock.Lock()
+				if _, ok := stocks[cmd.Args[1]]; !ok {
 					println("Stock is not in map, updating map...")
 					requestStockPrice(cmd.Args[1])
 				}
 
 				new_quote.Stock = cmd.Args[1]
-				new_quote.Price = stocks_map[new_quote.Stock].Price
+				new_quote.Price = stocks[new_quote.Stock].Price
+				stocks_lock.Unlock()
 
 				log := quote_log{
 					Timestamp:    time.Now().Unix(),
@@ -251,10 +255,12 @@ func socketReader(conn *websocket.Conn) {
 
 				if !stringInSlice(cmd.Command, []string{"CANCEL_BUY", "CANCEL_SELL"}) {
 					// DO WE KNOW THIS STOCK?
-					if _, ok := stocks_map[cmd.Args[1]]; !ok {
+					stocks_lock.Lock()
+					if _, ok := stocks[cmd.Args[1]]; !ok {
 						println("Stock is not in map, updating map...")
 						requestStockPrice(cmd.Args[1])
 					}
+					stocks_lock.Unlock()
 				}
 
 				msg, _ := json.Marshal(cmd)
@@ -268,7 +274,7 @@ func socketReader(conn *websocket.Conn) {
 						Body:        []byte(msg),
 					},
 				)
-				println(" [x] Sent Trigger %s", msg)
+				fmt.Printf(" [x] Sent Trigger %s", msg)
 				failOnError(err, "Failed to publish a message")
 			}
 		}
@@ -320,7 +326,8 @@ func main() {
 
 	//log.SetOutput(ioutil.Discard)
 
-	stocks_map = make(map[string]quote)
+	stocks = make(map[string]quote)
+	stocks_lock = sync.Mutex{}
 
 	// Connect to RabbitMQ server
 	time.Sleep(time.Second * 15)
@@ -419,7 +426,9 @@ func setupStockListener() {
 	// This routine updates local map of stocks with the queuer that publishes every second
 	go func() {
 		for d := range msgs {
-			json.Unmarshal(d.Body, &stocks_map)
+			stocks_lock.Lock()
+			json.Unmarshal(d.Body, &stocks)
+			stocks_lock.Unlock()
 		}
 	}()
 }
