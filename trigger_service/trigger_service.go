@@ -1,7 +1,7 @@
 package main
 
 import (
-	"bytes"
+	// "bytes"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -102,13 +102,12 @@ func push_trigger(user_id string, current_price float64, current_triger Trigger,
 	// NEED TO FIGURE OUT HOW TO CREATE COMMAND PROPERLY
 	string_amount := fmt.Sprintf("%f", current_triger.Amount)
 	string_price := fmt.Sprintf("%f", current_price)
-	cmd := &Command{0, queue_name, []string{user_id, current_triger.Stock, string_amount, string_price}}
+	cmd := []Command{{0, queue_name, []string{user_id, current_triger.Stock, string_amount, string_price}}}
 
 	println("Trigger is %s", cmd)
 
 	// CONVERT COMMAND TO BYTES ARRAY
-	command_bytes := new(bytes.Buffer)
-	json.NewEncoder(command_bytes).Encode(cmd)
+	res, _ := json.Marshal(cmd)
 
 	err_3 := rabbitChannel.Publish(
 		"",       // name
@@ -117,7 +116,7 @@ func push_trigger(user_id string, current_price float64, current_triger Trigger,
 		false,    // immediate
 		amqp.Publishing{
 			ContentType: "text/plain",
-			Body:        []byte(command_bytes.Bytes()),
+			Body:        []byte(res),
 		})
 	failOnError(err_3, "COULD NOT PUSH TO FORCE BUY / SELL QUEUE")
 
