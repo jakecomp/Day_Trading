@@ -210,6 +210,8 @@ func main() {
 	// Setup For Logging User Commands
 	startCommandLogger(mb)
 
+	logchannel = setupLogger()
+
 	// Used for tracking the last seen price of a stock
 	stock_pricer := &StockPricer{ // Maybe replace with redis?
 		rdb: setupRedis(),

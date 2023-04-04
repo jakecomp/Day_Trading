@@ -1,12 +1,45 @@
 package main
 
 import (
-	"bytes"
+	// "bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/streadway/amqp"
 	"log"
-	"net/http"
+	// "net/http"
 )
+
+var logchannel *amqp.Channel
+
+func sendLog(topic string, content []byte) error {
+	return logchannel.Publish(
+		"logs_topic", // exchange
+		topic,        // routing key
+		false,        // mandatory
+		false,        // immediate
+		amqp.Publishing{
+			ContentType: "text/plain",
+			Body:        content,
+		})
+}
+func setupLogger() *amqp.Channel {
+	conn, err := dial("amqp://guest:guest@" + rabbitmqHOST + ":5672/")
+	failOnError(err, "Failed to connect to RabbitMQ")
+	ch, err := conn.Channel()
+	failOnError(err, "Failed to declare an exchange")
+	err = ch.ExchangeDeclare(
+		"logs_topic", // name
+		"topic",      // type
+		true,         // durable
+		false,        // auto-deleted
+		false,        // internal
+		false,        // no-wait
+		nil,          // arguments
+	)
+	failOnError(err, "Failed to publish a message")
+	logchannel = ch
+	return ch
+}
 
 // Logs User Commands
 func startCommandLogger(mb *MessageBus) {
@@ -59,8 +92,9 @@ func sendUserLog(n Notification) {
 		}
 	}
 	ulog, _ := json.Marshal(u)
-	bodyReader := bytes.NewReader(ulog)
-	_, err := http.Post("http://"+logHOST+":8004/userlog", "application/json", bodyReader)
+	// bodyReader := bytes.NewReader(ulog)
+	// _, err := http.Post("http://"+logHOST+":8004/userlog", "application/json", bodyReader)
+	err := sendLog("userlog", ulog)
 	if err != nil {
 		log.Println(err)
 	}
@@ -77,8 +111,9 @@ func sendAccountLog(n *Notification, bal float32) {
 	}
 
 	ulog, _ := json.Marshal(a)
-	bodyReader := bytes.NewReader(ulog)
-	_, err := http.Post("http://"+logHOST+":8004/accountlog", "application/json", bodyReader)
+	// bodyReader := bytes.NewReader(ulog)
+	// _, err := http.Post("http://"+logHOST+":8004/accountlog", "application/json", bodyReader)
+	err := sendLog("accountlog", ulog)
 	if err != nil {
 		log.Println(err)
 	}
@@ -90,8 +125,9 @@ func sendErrorLog(ticket int64, msg string) {
 		Ticketnumber: ticket,
 		DebugMessage: msg,
 	})
-	bodyReader := bytes.NewReader(ulog)
-	_, err := http.Post("http://"+logHOST+":8004/errorlog", "application/json", bodyReader)
+	// bodyReader := bytes.NewReader(ulog)
+	// _, err := http.Post("http://"+logHOST+":8004/errorlog", "application/json", bodyReader)
+	err := sendLog("errorlog", ulog)
 	if err != nil {
 		log.Println(err)
 	}
@@ -104,9 +140,10 @@ func sendDebugLog(ticket int64, msg string) {
 			Ticketnumber: ticket,
 			DebugMessage: msg,
 		})
-		bodyReader := bytes.NewReader(ulog)
-		log.Println(string(ulog))
-		_, err := http.Post("http://"+logHOST+":8004/debuglog", "application/json", bodyReader)
+		// bodyReader := bytes.NewReader(ulog)
+		// log.Println(string(ulog))
+		// _, err := http.Post("http://"+logHOST+":8004/debuglog", "application/json", bodyReader)
+		err := sendLog("debuglog", ulog)
 		if err != nil {
 			log.Println(err)
 		}

@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"github.com/streadway/amqp"
 	"log"
 	"net/http"
 	"os"
@@ -87,6 +88,66 @@ var f *os.File
 // var b  *bytes.Buffer
 // var ec ErrCollector
 
+func dial(url string) (*amqp.Connection, error) {
+	for {
+		conn, err := amqp.Dial("amqp://guest:guest@" + rabbitmqHOST + ":5672/")
+		if err == nil {
+			return conn, err
+		}
+		time.Sleep(time.Second * 3)
+	}
+}
+func failOnError(err error, msg string) {
+	if err != nil {
+		log.Fatalf("%s: %s", msg, err)
+	}
+}
+
+func setupLogListeners(conn *amqp.Connection, log_topic string) (<-chan amqp.Delivery, error) {
+	// Create a channel
+	ch, err := conn.Channel()
+	failOnError(err, "Failed to open a channel")
+
+	// Declare a queue
+	err = ch.ExchangeDeclare(
+		"logs_topic", // name
+		"topic",      // type
+		true,         // durable
+		false,        // auto-deleted
+		false,        // internal
+		false,        // no-wait
+		nil,          // arguments
+	)
+	q, err := ch.QueueDeclare(
+		"",    // name
+		false, // durable
+		false, // delete when unused
+		true,  // exclusive
+		false, // no-wait
+		nil,   // arguments
+	)
+	err = ch.QueueBind(
+		q.Name,       // queue name
+		log_topic,    // routing key
+		"logs_topic", // exchange
+		false,
+		nil)
+	failOnError(err, "Failed to declare an exchange")
+	failOnError(err, "Failed to declare a queue")
+
+	// Consume messages from the queue
+	msgs, err := ch.Consume(
+		q.Name,           // Queue name
+		"logger_service", // Consumer name
+		true,             // Auto-acknowledge
+		false,            // Exclusive
+		false,            // No-local
+		false,            // No-wait
+		nil,              // Arguments
+	)
+	return msgs, err
+}
+
 func main() {
 	var err error
 
@@ -107,7 +168,70 @@ func main() {
 
 	fmt.Println("Running on Port number: 8004")
 
-	//	errorlog("hello")
+	conn, err := dial("amqp://guest:guest@" + rabbitmqHOST + ":5672/")
+	failOnError(err, "Failed to connect to RabbitMQ")
+	defer conn.Close()
+
+	userlogs, err := setupLogListeners(conn, "userlog")
+	accountlogs, err := setupLogListeners(conn, "accountlog")
+	quotelogs, err := setupLogListeners(conn, "quotelog")
+	systemlogs, err := setupLogListeners(conn, "systemlog")
+	errorlogs, err := setupLogListeners(conn, "errorlog")
+	debuglogs, err := setupLogListeners(conn, "debuglog")
+	dumplogs, err := setupLogListeners(conn, "dumplog")
+	go func() {
+		for {
+			var out []byte
+			select {
+			case new_log := <-userlogs:
+				recive_log := &userCommand{}
+				json.Unmarshal(new_log.Body, recive_log)
+				recive_log.Timestamp = timestamp()
+				out, _ = xml.MarshalIndent(recive_log, "", "\t")
+			case new_log := <-accountlogs:
+				recive_log := &accountTransaction{}
+				json.Unmarshal(new_log.Body, recive_log)
+				recive_log.Timestamp = timestamp()
+				out, _ = xml.MarshalIndent(recive_log, "", "\t")
+			case new_log := <-quotelogs:
+				recive_log := &quoteServer{}
+				json.Unmarshal(new_log.Body, recive_log)
+				recive_log.Timestamp = timestamp()
+				out, _ = xml.MarshalIndent(recive_log, "", "\t")
+
+			case new_log := <-systemlogs:
+				recive_log := &systemEvent{}
+				json.Unmarshal(new_log.Body, recive_log)
+				recive_log.Timestamp = timestamp()
+				out, _ = xml.MarshalIndent(recive_log, "", "\t")
+
+			case new_log := <-errorlogs:
+				recive_log := &errorEvent{}
+				json.Unmarshal(new_log.Body, recive_log)
+				recive_log.Timestamp = timestamp()
+				out, _ = xml.MarshalIndent(recive_log, "", "\t")
+
+			case new_log := <-debuglogs:
+				recive_log := &debugEvent{}
+				json.Unmarshal(new_log.Body, recive_log)
+				recive_log.Timestamp = timestamp()
+				out, _ = xml.MarshalIndent(recive_log, "", "\t")
+
+			case new_log := <-dumplogs:
+				recive_log := &debugEvent{}
+				json.Unmarshal(new_log.Body, recive_log)
+				recive_log.Timestamp = timestamp()
+				out, _ = xml.MarshalIndent(recive_log, "", "\t")
+			}
+			f.WriteString(string(out))
+			f.WriteString("\n")
+
+		}
+	}()
+
+	// defer ch.Close()
+
+	// errorlog("hello")
 	// recive_log := &user_log{
 	// 	//XmlName:      xml.Name{},
 	// 	Timestamp:    0,
@@ -128,10 +252,10 @@ func main() {
 
 }
 
+const rabbitmqHOST = "10.9.0.10"
+
 func timestamp() int64 {
-
 	return time.Now().Unix()
-
 }
 
 func handleRequests() {

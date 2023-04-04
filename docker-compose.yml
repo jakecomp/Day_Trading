@@ -66,6 +66,7 @@ services:
     networks:
       net-10.9.0.0:
         ipv4_address: 10.9.0.9
+    depends_on: [rabbitmq, mongo_db]
 
   rabbitmq:
     image: rabbitmq:3.8.17-management-alpine
