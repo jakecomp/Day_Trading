@@ -56,7 +56,6 @@ func getQuote(stock string) Stock {
 		log.Fatal(err)
 	}
 	json.Unmarshal(body, &stonks)
-	log.Print(stonks)
 	return stonks
 }
 
@@ -71,7 +70,6 @@ func getAllQuotes() map[string]Stock {
 		log.Fatal(err)
 	}
 	json.Unmarshal(body, &stonks)
-	log.Print(stonks)
 	return stonks
 }
 
@@ -130,10 +128,8 @@ func main() {
 		var s interface{}
 		if string(request.Body) == "All" {
 			s = getAllQuotes()
-			log.Println("got result for", s)
 		} else {
 			s = getQuote(string(request.Body))
-			log.Println("got result for", s)
 		}
 		body, err := json.Marshal(s)
 		if err != nil {
@@ -149,7 +145,6 @@ func main() {
 				ContentType: "text/plain",
 				Body:        body,
 			})
-		log.Printf(" [x] Sent %s", string(body))
 	}
 }
 

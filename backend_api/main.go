@@ -67,6 +67,8 @@ type quote_log struct {
 	StockSymbol  string `xml:"stock_symbol" json:"stock_symbol"`
 }
 
+var stocks map[string]quote
+
 func homePage(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Welcome to the HomePage!")
 	fmt.Println("Endpoint Hit: homePage")
@@ -81,7 +83,7 @@ func Signup(w http.ResponseWriter, r *http.Request) {
 	// Parse and decode the request body into a new `Credentials` instance
 	creds := &Credentials{}
 	err := json.NewDecoder(r.Body).Decode(creds)
-	fmt.Println(creds)
+
 	if err != nil {
 		// If there is something wrong with the request body, return a 400 status
 		fmt.Println("Error with request format")
@@ -104,14 +106,14 @@ func Signup(w http.ResponseWriter, r *http.Request) {
 		db, ctx = connect()
 	}
 	collection := db.Database(database).Collection("users")
-	result, err := collection.InsertOne(context.TODO(), doc)
+	_, err = collection.InsertOne(context.TODO(), doc)
 	if err != nil {
 		fmt.Println("Error Inserting to DB: ", err)
 		db.Disconnect(ctx)
 		return
 	}
 
-	print(result)
+	fmt.Fprintf(w, "SUCCESS")
 }
 
 func Signin(w http.ResponseWriter, r *http.Request) {
@@ -159,7 +161,6 @@ func Signin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Fprintf(w, string(token))
-	fmt.Println("Token generated: ", string(token))
 }
 
 func socketHandler(w http.ResponseWriter, r *http.Request) {
@@ -207,6 +208,7 @@ func socketReader(conn *websocket.Conn) {
 			break
 		}
 
+<<<<<<< HEAD
 		err = json.Unmarshal(message, &cmds)
 		if err != nil {
 			fmt.Println("JSON: ", cmds[0])
@@ -225,6 +227,23 @@ func socketReader(conn *websocket.Conn) {
 
 				// Get a quote
 				allquote := make(map[string]quote)
+=======
+		err = json.Unmarshal(message, cmd)
+
+		// Check if should queue item
+		if cmd.Command == "DUMPLOG" {
+			fmt.Printf("DUMPLOG FOUND")
+			//_, err := http.Post("http://10.9.0.9:8004/userlog", "application/json", "")
+			//if err != nil {
+			//	log.Fatal(err)
+			//}
+		} else if cmd.Command == "QUOTE" {
+
+			// Get a quote
+			// var resp *http.Response
+			//allquote := make(map[string]quote)
+			if len(cmd.Args) == 2 {
+>>>>>>> 1bb8b1a (Removed print statements, modified trigger service to accept tickets from queue, modified main.go to send triggers via queue)
 				var thisStock quote
 				resp, err := http.Get("http://10.9.0.6:8002/" + cmd.Args[1])
 				if resp.StatusCode != http.StatusOK {
@@ -232,7 +251,7 @@ func socketReader(conn *websocket.Conn) {
 
 				}
 				json.NewDecoder(resp.Body).Decode(&thisStock)
-				allquote[thisStock.Stock] = thisStock
+				stocks[thisStock.Stock] = thisStock
 				log := quote_log{
 					Timestamp:    time.Now().Unix(),
 					Username:     cmd.Args[0],
@@ -243,9 +262,60 @@ func socketReader(conn *websocket.Conn) {
 
 				log_bytes, err := json.Marshal(log)
 
+<<<<<<< HEAD
 				go http.Post("http://10.9.0.9:8004/quotelog", "application/json", bytes.NewBuffer(log_bytes))
 			}
 
+=======
+				_, err = http.Post("http://10.9.0.9:8004/quotelog", "application/json", bytes.NewBuffer(log_bytes))
+				if err != nil {
+					fmt.Println(err)
+				}
+			} else {
+				// TODO we need a way to log all quotes
+				resp, err := http.Get("http://10.9.0.6:8002/all")
+				if resp.StatusCode != http.StatusOK {
+					fmt.Println("Error: Failed to get quote. ", err)
+
+				}
+				json.NewDecoder(resp.Body).Decode(&stocks)
+			}
+
+		} else if stringInSlice(cmd.Command, []string{"SET_BUY_AMOUNT", "SET_SELL_AMOUNT", "SET_BUY_TRIGGER", "SET_SELL_TRIGGER", "CANCEL_SET_BUY", "CANCEL_SET_SELL"}) {
+			msg, _ := json.Marshal(*cmd)
+			err = queueServiceConn.Publish(
+				"",        // Exchange name
+				"trigger", // Queue name
+				false,     // Mandatory
+				false,     // Immediate
+				amqp.Publishing{
+					ContentType: "text/json",
+					Body:        []byte(msg),
+				},
+			)
+			println(" [x] Sent Trigger %s", msg)
+			failOnError(err, "Failed to publish a message")
+		} else {
+			msg, _ := json.Marshal(*cmd)
+			err = queueServiceConn.Publish(
+				"",         // Exchange name
+				queue.Name, // Queue name
+				false,      // Mandatory
+				false,      // Immediate
+				amqp.Publishing{
+					ContentType: "text/json",
+					Body:        []byte(msg),
+				},
+			)
+			log.Printf(" [x] Sent %s", msg)
+			failOnError(err, "Failed to publish a message")
+
+		}
+
+		if err != nil {
+			fmt.Println("Error during message writing:", err)
+			break
+>>>>>>> 1bb8b1a (Removed print statements, modified trigger service to accept tickets from queue, modified main.go to send triggers via queue)
 		}
 
 		// This Should return success or failure eventually
@@ -255,6 +325,15 @@ func socketReader(conn *websocket.Conn) {
 			break
 		}
 	}
+}
+
+func stringInSlice(a string, list []string) bool {
+	for _, b := range list {
+		if b == a {
+			return true
+		}
+	}
+	return false
 }
 
 func setupCORS(w http.ResponseWriter, r *http.Request) {
@@ -288,6 +367,8 @@ func main() {
 
 	log.SetOutput(ioutil.Discard)
 
+	stocks = make(map[string]quote)
+
 	// Connect to RabbitMQ server
 	time.Sleep(time.Second * 15)
 	conn, err := dial("amqp://guest:guest@10.9.0.10:5672/")
@@ -296,7 +377,6 @@ func main() {
 
 	queue, queueServiceConn = connectQueue(conn)
 	defer queueServiceConn.Close()
-	fmt.Print("queue created")
 	log.Println("RUNNING ON PORT 8000...")
 	handleRequests()
 }
@@ -321,8 +401,18 @@ func connectQueue(conn *amqp.Connection) (amqp.Queue, *amqp.Channel) {
 	ch, err := conn.Channel()
 	failOnError(err, "Failed to open a channel")
 
-	// Declare a queue
 	q, err := ch.QueueDeclare(
+		"trigger", // Queue name
+		false,     // Durable
+		false,     // Delete when unused
+		false,     // Exclusive
+		false,     // No-wait
+		nil,       // Arguments
+	)
+	failOnError(err, "Failed to declare a queue")
+
+	// Declare a queue
+	q, err = ch.QueueDeclare(
 		"worker", // Queue name
 		false,    // Durable
 		false,    // Delete when unused
