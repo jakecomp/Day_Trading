@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/streadway/amqp"
@@ -43,9 +44,49 @@ type UserTriggers struct {
 	User     string
 	Triggers map[TriggerKey]Trigger
 }
+type TriggerStore struct {
+	userMap map[string]UserTriggers
+	lock    sync.RWMutex
+}
 
-var userMap map[string]UserTriggers
-var stocks map[string]quote
+func (sh *TriggerStore) Get(user string) (UserTriggers, bool) {
+	sh.lock.RLock()
+	p, ok := sh.userMap[user]
+	sh.lock.RUnlock()
+	return p, ok
+}
+func (sh *TriggerStore) Set(user string, q UserTriggers) {
+	sh.lock.Lock()
+	sh.userMap[user] = q
+	sh.lock.Unlock()
+}
+
+var triggerStore = &TriggerStore{
+	userMap: make(map[string]UserTriggers),
+}
+
+type StockHolder struct {
+	stocks map[string]quote
+	lock   sync.RWMutex
+}
+
+func (sh *StockHolder) GetStock(stock string) (quote, bool) {
+	sh.lock.RLock()
+	p, ok := sh.stocks[stock]
+	sh.lock.RUnlock()
+	return p, ok
+}
+func (sh *StockHolder) UpdateFromJson(body []byte) {
+	sh.lock.Lock()
+	json.Unmarshal(body, &sh.stocks)
+	sh.lock.Unlock()
+}
+
+var stocks = StockHolder{
+	stocks: make(map[string]quote),
+}
+
+// var stocks map[string]quote
 
 var rabbitChannel *amqp.Channel
 var queue amqp.Queue
@@ -56,13 +97,15 @@ func set_ammount(cmd string, user string, stock string, amount float64) {
 	triggerKey.Command = cmd
 	triggerKey.Stock = stock
 
-	_, ok := userMap[user]
+	triggerStore.lock.Lock()
+	userMap := &triggerStore.userMap
+	_, ok := (*userMap)[user]
 	if !ok {
-		userMap[user] = UserTriggers{user, make(map[TriggerKey]Trigger)}
+		(*userMap)[user] = UserTriggers{user, make(map[TriggerKey]Trigger)}
 	}
 
 	// Check if key exists
-	trigger, ok := userMap[user].Triggers[triggerKey]
+	trigger, ok := (*userMap)[user].Triggers[triggerKey]
 	if ok {
 		trigger.Amount = amount
 
@@ -73,7 +116,8 @@ func set_ammount(cmd string, user string, stock string, amount float64) {
 		trigger.Price = -1.0
 	}
 
-	userMap[user].Triggers[triggerKey] = trigger
+	(*userMap)[user].Triggers[triggerKey] = trigger
+	triggerStore.lock.Unlock()
 }
 
 func set_trigger(cmd string, user string, stock string, price float64) {
@@ -82,29 +126,33 @@ func set_trigger(cmd string, user string, stock string, price float64) {
 	triggerKey.Command = cmd
 	triggerKey.Stock = stock
 
-	_, ok := userMap[user]
+	triggerStore.lock.Lock()
+	defer triggerStore.lock.Unlock()
+	userMap := &triggerStore.userMap
+	_, ok := (*userMap)[user]
 	if !ok {
 		return
 	}
 
-	trigger, ok := userMap[user].Triggers[triggerKey]
+	trigger, ok := (*userMap)[user].Triggers[triggerKey]
 
 	if ok {
 		trigger.Price = price
-		userMap[user].Triggers[triggerKey] = trigger
+		(*userMap)[user].Triggers[triggerKey] = trigger
 	}
+
 }
 
 func push_trigger(user_id string, current_price float64, current_triger Trigger, queue_name string) {
 
-	println("TRIGGER EXECUTING!")
+	// println("TRIGGER EXECUTING!")
 
 	// NEED TO FIGURE OUT HOW TO CREATE COMMAND PROPERLY
 	string_amount := fmt.Sprintf("%f", current_triger.Amount)
 	string_price := fmt.Sprintf("%f", current_price)
 	cmd := &Command{0, queue_name, []string{user_id, current_triger.Stock, string_amount, string_price}}
 
-	println("Trigger is %s", cmd)
+	// println("Trigger is %s", cmd)
 
 	// CONVERT COMMAND TO BYTES ARRAY
 	command_bytes := new(bytes.Buffer)
@@ -126,13 +174,14 @@ func push_trigger(user_id string, current_price float64, current_triger Trigger,
 func check_triggers() {
 
 	// Iterate through each user
-
+	userMap := triggerStore.userMap
 	for user_key, all_triggers := range userMap {
 
 		// Iterate through each trigger for this user
 		for trigger_key, current_trigger := range all_triggers.Triggers {
 
-			current_price := stocks[trigger_key.Stock].Price
+			stonk, _ := stocks.GetStock(trigger_key.Stock)
+			current_price := stonk.Price
 			trigger_price := current_trigger.Price
 
 			if trigger_key.Command == "BUY" {
@@ -149,14 +198,16 @@ func check_triggers() {
 			}
 		}
 	}
+
 }
 
 func delete_key(cmd string, user string, stock string) {
 	triggerKey := TriggerKey{stock, cmd}
-	_, ok := userMap[user].Triggers[triggerKey]
+	userMap := &triggerStore.userMap
+	_, ok := (*userMap)[user].Triggers[triggerKey]
 
 	if ok {
-		delete(userMap[user].Triggers, triggerKey)
+		delete((*userMap)[user].Triggers, triggerKey)
 	}
 }
 
@@ -219,8 +270,6 @@ func main() {
 
 	queue, rabbitChannel = connectQueue(conn)
 	defer rabbitChannel.Close()
-
-	userMap = make(map[string]UserTriggers)
 
 	log.Println("RUNNING ON PORT 8004...")
 	go clientCode(conn)
@@ -363,9 +412,10 @@ func clientCode(conn *amqp.Connection) {
 	go func() {
 		for d := range msgs {
 			// Call function for checking stocks for updates
+			stocks.UpdateFromJson(d.Body)
 
-			json.Unmarshal(d.Body, &stocks)
-
+			triggerStore.lock.RLocker()
+			defer triggerStore.lock.RUnlock()
 			//Check triggers
 			check_triggers()
 

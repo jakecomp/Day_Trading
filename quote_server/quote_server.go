@@ -76,7 +76,7 @@ func main() {
 	known_stocks.stocks = make(map[string]quote, 0)
 	known_stocks.stocks["S"] = quote{"S", float64(100)}
 	fmt.Println("Quote Server runing on Port 8002...")
-	router := gin.Default()
+	router := gin.New()
 	router.GET("/", gen_quote)
 	// To get the stock price of R
 	// curl localhost:8002/R
