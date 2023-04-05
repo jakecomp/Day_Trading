@@ -246,7 +246,7 @@ func socketReader(conn *websocket.Conn) {
 				var new_quote quote
 				// DO WE KNOW THIS STOCK?
 				if _, ok := stocks_map.GetStock(cmd.Args[1]); !ok {
-					println("Stock is not in map, updating map...")
+					// println("Stock is not in map, updating map...")
 					requestStockPrice(cmd.Args[1])
 				}
 
@@ -273,7 +273,7 @@ func socketReader(conn *websocket.Conn) {
 				if !stringInSlice(cmd.Command, []string{"CANCEL_BUY", "CANCEL_SELL"}) {
 					// DO WE KNOW THIS STOCK?
 					if _, ok := stocks_map.GetStock(cmd.Args[1]); !ok {
-						println("Stock is not in map, updating map...")
+						// println("Stock is not in map, updating map...")
 						requestStockPrice(cmd.Args[1])
 					}
 				}
@@ -289,10 +289,10 @@ func socketReader(conn *websocket.Conn) {
 						Body:        []byte(msg),
 					},
 				)
-				println(" [x] Sent Trigger %s", msg)
+				// println(" [x] Sent Trigger %s", msg)
 				failOnError(err, "Failed to publish a message")
 			} else {
-				fmt.Printf("Received Unknown Command: %s\n", cmd.Command)
+				// fmt.Printf("Received Unknown Command: %s\n", cmd.Command)
 			}
 		}
 		// This Should return success or failure eventually

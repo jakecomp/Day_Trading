@@ -49,18 +49,6 @@ type TriggerStore struct {
 	lock    sync.RWMutex
 }
 
-func (sh *TriggerStore) Get(user string) (UserTriggers, bool) {
-	sh.lock.RLock()
-	p, ok := sh.userMap[user]
-	sh.lock.RUnlock()
-	return p, ok
-}
-func (sh *TriggerStore) Set(user string, q UserTriggers) {
-	sh.lock.Lock()
-	sh.userMap[user] = q
-	sh.lock.Unlock()
-}
-
 var triggerStore = &TriggerStore{
 	userMap: make(map[string]UserTriggers),
 }
@@ -97,7 +85,6 @@ func set_ammount(cmd string, user string, stock string, amount float64) {
 	triggerKey.Command = cmd
 	triggerKey.Stock = stock
 
-	triggerStore.lock.Lock()
 	userMap := &triggerStore.userMap
 	_, ok := (*userMap)[user]
 	if !ok {
@@ -122,12 +109,11 @@ func set_ammount(cmd string, user string, stock string, amount float64) {
 
 func set_trigger(cmd string, user string, stock string, price float64) {
 	// Make Map Key (Stock, Command)
-	triggerKey := TriggerKey{}
-	triggerKey.Command = cmd
-	triggerKey.Stock = stock
+	triggerKey := TriggerKey{
+		Command: cmd,
+		Stock:   stock,
+	}
 
-	triggerStore.lock.Lock()
-	defer triggerStore.lock.Unlock()
 	userMap := &triggerStore.userMap
 	_, ok := (*userMap)[user]
 	if !ok {
@@ -174,6 +160,8 @@ func push_trigger(user_id string, current_price float64, current_triger Trigger,
 func check_triggers() {
 
 	// Iterate through each user
+	triggerStore.lock.Lock()
+	defer triggerStore.lock.Unlock()
 	userMap := triggerStore.userMap
 	for user_key, all_triggers := range userMap {
 
@@ -301,6 +289,8 @@ func triggerListener(queue amqp.Queue) {
 			}
 
 			log.Printf("Received a trigger ticket! %s", cmd.Command)
+			triggerStore.lock.Lock()
+			defer triggerStore.lock.Unlock()
 
 			if cmd.Command == "SET_BUY_AMOUNT" {
 				amount, _ := strconv.ParseFloat(cmd.Args[2], 64)
