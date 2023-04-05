@@ -112,7 +112,7 @@ func signup(user User) error {
 	body := marshalAndSend(user, "http://localhost:8000/signup")
 
 	fmt.Printf("res was %s\n", string(body))
-	if strings.Compare(string(body), `SIGNED YOU UP!`) != 0 {
+	if strings.Compare(string(body), `SUCCESS`) != 0 {
 		return errors.New("Failed to sign up")
 	}
 	return nil
@@ -169,16 +169,18 @@ func main() {
 	scanner := bufio.NewReader(os.Stdin)
 	cmds := parseCmds(scanner)
 	usr := User{Username: "testing", Password: "lol"}
+
 	err := signup(usr)
 	if err != nil {
 		log.Fatal(err)
 	}
+	println("WE ARE SIGNED UP!")
 
 	tok, err := signin(usr)
-
 	if err != nil {
 		log.Fatal(err)
 	}
+	println("WE ARE SIGNED IN!")
 
 	c := connectToSocket(tok)
 	defer c.Close()

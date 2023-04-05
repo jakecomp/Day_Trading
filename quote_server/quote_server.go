@@ -55,14 +55,28 @@ func gen_quote_for_stock(c *gin.Context) {
 
 }
 func gen_quote_for_all_stocks(c *gin.Context) {
+
+	for key, value := range known_stocks.stocks {
+
+		const max = 500.0
+		const min = 10.0
+
+		rand_price := min + rand.Float64()*(max-min)
+		value.Price = rand_price
+		known_stocks.stocks[key] = value
+
+	}
+
 	c.IndentedJSON(http.StatusOK, known_stocks.stocks)
 }
 
 func main() {
+
 	gin.SetMode(gin.ReleaseMode)
 	known_stocks.stocks = make(map[string]quote, 0)
+	known_stocks.stocks["S"] = quote{"S", float64(100)}
 	fmt.Println("Quote Server runing on Port 8002...")
-	router := gin.Default()
+	router := gin.New()
 	router.GET("/", gen_quote)
 	// To get the stock price of R
 	// curl localhost:8002/R

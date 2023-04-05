@@ -41,14 +41,21 @@ services:
       net-10.9.0.0:
         ipv4_address: 10.9.0.6
 
-  quote_cache:
+  quote_queuer:
     build: ./quote_queuer
     # ports:
     #   - "6379:6379"
-    depends_on: [rabbitmq]
+    depends_on: [rabbitmq, quote_server]
     networks:
       net-10.9.0.0:
         ipv4_address: 10.9.0.11
+
+  trigger_service:
+    build: ./trigger_service
+    depends_on: [quote_queuer]
+    networks:
+      net-10.9.0.0:
+        ipv4_address: 10.9.0.12
 
   worker:
     build: ./worker_service

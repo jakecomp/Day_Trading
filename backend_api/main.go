@@ -6,9 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
@@ -22,7 +22,7 @@ import (
 
 var db *mongo.Client
 var ctx context.Context
-var queueServiceConn *amqp.Channel
+var rabbitChannel *amqp.Channel
 var queue amqp.Queue
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  0,
@@ -67,13 +67,33 @@ type quote_log struct {
 	StockSymbol  string `xml:"stock_symbol" json:"stock_symbol"`
 }
 
+type StockHolder struct {
+	stocks map[string]quote
+	lock   sync.RWMutex
+}
+
+func (sh *StockHolder) GetStock(stock string) (quote, bool) {
+	sh.lock.RLock()
+	p, ok := sh.stocks[stock]
+	sh.lock.RUnlock()
+	return p, ok
+}
+func (sh *StockHolder) SetStock(stock string, q quote) {
+	sh.lock.Lock()
+	sh.stocks[stock] = q
+	sh.lock.Unlock()
+}
+
+var stocks_map = StockHolder{
+	stocks: make(map[string]quote),
+}
+
 func homePage(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Welcome to the HomePage!")
 	fmt.Println("Endpoint Hit: homePage")
 }
 
 func Signup(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Endpoint Hit: signup")
 	setupCORS(w, r)
 	if (*r).Method == "OPTIONS" {
 		return
@@ -82,7 +102,7 @@ func Signup(w http.ResponseWriter, r *http.Request) {
 	// Parse and decode the request body into a new `Credentials` instance
 	creds := &Credentials{}
 	err := json.NewDecoder(r.Body).Decode(creds)
-	fmt.Println(creds)
+
 	if err != nil {
 		// If there is something wrong with the request body, return a 400 status
 		fmt.Println("Error with request format")
@@ -105,20 +125,17 @@ func Signup(w http.ResponseWriter, r *http.Request) {
 		db, ctx = connect()
 	}
 	collection := db.Database(database).Collection("users")
-	result, err := collection.InsertOne(context.TODO(), doc)
+	_, err = collection.InsertOne(context.TODO(), doc)
 	if err != nil {
 		fmt.Println("Error Inserting to DB: ", err)
 		db.Disconnect(ctx)
 		return
 	}
 
-	fmt.Fprintf(w, "SIGNED YOU UP!")
-	fmt.Println("signup user " + doc.Username + " with hash " + doc.Hash)
-	print(result)
+	fmt.Fprintf(w, "SUCCESS")
 }
 
 func Signin(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Endpoint Hit: signin")
 	setupCORS(w, r)
 	if (*r).Method == "OPTIONS" {
 		return
@@ -163,19 +180,15 @@ func Signin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Fprintf(w, string(token))
-	fmt.Println("Token generated: ", string(token))
 }
 
 func socketHandler(w http.ResponseWriter, r *http.Request) {
 	// Authenticate User
-	fmt.Println("Endpoint Hit: WS")
 	var valid = validateToken(w, r)
 	if valid != nil {
 		fmt.Println("Token not valid! Error: ", valid)
 		return
 	}
-
-	fmt.Println("Token Valid! Connecting Websocket...")
 
 	// Upgrade our raw HTTP connection to a websocket based one
 	upgrader.CheckOrigin = func(r *http.Request) bool { return true }
@@ -185,7 +198,6 @@ func socketHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.Close()
-	//err = conn.WriteMessage(1, []byte("Hello there"))
 	socketReader(conn)
 }
 
@@ -200,7 +212,7 @@ func socketReader(conn *websocket.Conn) {
 			break
 		}
 		// Pass the messages along to the Worker to keep the queue saturated
-		err = queueServiceConn.Publish(
+		err = rabbitChannel.Publish(
 			"",         // Exchange name
 			queue.Name, // Queue name
 			false,      // Mandatory
@@ -230,39 +242,75 @@ func socketReader(conn *websocket.Conn) {
 				//	log.Fatal(err)
 				//}
 			} else if cmd.Command == "QUOTE" {
-
 				// Get a quote
-				allquote := make(map[string]quote)
-				var thisStock quote
-				resp, err := http.Get("http://10.9.0.6:8002/" + cmd.Args[1])
-				if resp.StatusCode != http.StatusOK {
-					fmt.Println("Error: Failed to get quote. ", err)
-
+				var new_quote quote
+				// DO WE KNOW THIS STOCK?
+				if _, ok := stocks_map.GetStock(cmd.Args[1]); !ok {
+					// println("Stock is not in map, updating map...")
+					requestStockPrice(cmd.Args[1])
 				}
-				json.NewDecoder(resp.Body).Decode(&thisStock)
-				allquote[thisStock.Stock] = thisStock
+
+				new_quote.Stock = cmd.Args[1]
+				tmp, _ := stocks_map.GetStock(new_quote.Stock)
+				new_quote.Price = tmp.Price
+
 				log := quote_log{
 					Timestamp:    time.Now().Unix(),
 					Username:     cmd.Args[0],
 					Ticketnumber: cmd.Ticket,
-					Price:        fmt.Sprintf("%v", thisStock.Price),
-					StockSymbol:  thisStock.Stock,
+					Price:        fmt.Sprintf("%v", new_quote.Price),
+					StockSymbol:  new_quote.Stock,
 				}
 
 				log_bytes, err := json.Marshal(log)
 
-				go http.Post("http://10.9.0.9:8004/quotelog", "application/json", bytes.NewBuffer(log_bytes))
+				_, err = http.Post("http://10.9.0.9:8004/quotelog", "application/json", bytes.NewBuffer(log_bytes))
+				if err != nil {
+					fmt.Println(err)
+				}
+			} else if stringInSlice(cmd.Command, []string{"SET_BUY_AMOUNT", "SET_SELL_AMOUNT", "SET_BUY_TRIGGER", "SET_SELL_TRIGGER", "CANCEL_SET_BUY", "CANCEL_SET_SELL"}) {
+
+				if !stringInSlice(cmd.Command, []string{"CANCEL_BUY", "CANCEL_SELL"}) {
+					// DO WE KNOW THIS STOCK?
+					if _, ok := stocks_map.GetStock(cmd.Args[1]); !ok {
+						// println("Stock is not in map, updating map...")
+						requestStockPrice(cmd.Args[1])
+					}
+				}
+
+				msg, _ := json.Marshal(cmd)
+				err = rabbitChannel.Publish(
+					"",        // Exchange name
+					"trigger", // Queue name
+					false,     // Mandatory
+					false,     // Immediate
+					amqp.Publishing{
+						ContentType: "text/json",
+						Body:        []byte(msg),
+					},
+				)
+				// println(" [x] Sent Trigger %s", msg)
+				failOnError(err, "Failed to publish a message")
+			} else {
+				// fmt.Printf("Received Unknown Command: %s\n", cmd.Command)
 			}
-
 		}
-
 		// This Should return success or failure eventually
 		// err = conn.WriteMessage(messageType, message)
-		if err != nil {
-			fmt.Println("Error during message writing:", err)
-			break
+		// if err != nil {
+		// 	fmt.Println("Error during message writing:", err)
+		// 	break
+		// }
+	}
+}
+
+func stringInSlice(a string, list []string) bool {
+	for _, b := range list {
+		if b == a {
+			return true
 		}
 	}
+	return false
 }
 
 func setupCORS(w http.ResponseWriter, r *http.Request) {
@@ -287,14 +335,13 @@ func dial(url string) (*amqp.Connection, error) {
 		// Rabbitmq is slow to start so we might have to wait on it
 		time.Sleep(time.Second * 3)
 	}
-
 }
 
 func main() {
 	db, ctx = connect()
 	defer db.Disconnect(ctx)
 
-	log.SetOutput(ioutil.Discard)
+	//log.SetOutput(ioutil.Discard)
 
 	// Connect to RabbitMQ server
 	time.Sleep(time.Second * 15)
@@ -302,11 +349,100 @@ func main() {
 	failOnError(err, "Failed to connect to RabbitMQ")
 	defer conn.Close()
 
-	queue, queueServiceConn = connectQueue(conn)
-	defer queueServiceConn.Close()
-	fmt.Print("queue created")
+	queue, rabbitChannel = connectQueue(conn)
+	defer rabbitChannel.Close()
+
+	setupStockListener()
+
 	log.Println("RUNNING ON PORT 8000...")
 	handleRequests()
+}
+
+func requestStockPrice(stock string) {
+	err := rabbitChannel.Publish(
+		"",               // name
+		"stock_requests", // routing key
+		false,            // mandatory
+		false,            // immediate
+		amqp.Publishing{
+			ContentType: "text/plain",
+			Body:        []byte(stock),
+		})
+	if err != nil {
+		log.Println(err)
+	}
+}
+
+func setupStockListener() {
+
+	// Queue for recieving stock prices
+	err := rabbitChannel.ExchangeDeclare(
+		"stock_prices", // name
+		"fanout",       // type
+		true,           // durable
+		false,          // auto-deleted
+		false,          // internal
+		false,          // no-wait
+		nil,            // arguments
+	)
+	if err != nil {
+		log.Println("Failed to declare an exchange")
+		panic(err)
+	}
+	// Queue for requesting stocks from queuer
+	_, err = rabbitChannel.QueueDeclare(
+		"stock_requests", // name
+		false,            // durable
+		false,            // delete when unused
+		false,            // exclusive
+		false,            // no-wait
+		nil,              // arguments
+	)
+
+	q, err := rabbitChannel.QueueDeclare(
+		"",    // name
+		false, // durable
+		false, // delete when unused
+		true,  // exclusive
+		false, // no-wait
+		nil,   // arguments
+	)
+	if err != nil {
+		log.Println("Failed to declare a queue")
+		panic(err)
+	}
+
+	// Bind our temperary queue to the global exchange (subscribe to stock prices)
+	err = rabbitChannel.QueueBind(
+		q.Name,         // queue name
+		"",             // routing key
+		"stock_prices", // exchange
+		false,
+		nil,
+	)
+	if err != nil {
+		log.Println("Failed to bind a queue")
+		panic(err)
+	}
+	failOnError(err, "Failed to bind a queue")
+
+	msgs, err := rabbitChannel.Consume(
+		q.Name, // queue
+		"",     // consumer
+		true,   // auto-ack
+		false,  // exclusive
+		false,  // no-local
+		false,  // no-wait
+		nil,    // args
+	)
+	failOnError(err, "Failed to register a consumer")
+
+	// This routine updates local map of stocks with the queuer that publishes every second
+	go func() {
+		for d := range msgs {
+			json.Unmarshal(d.Body, &stocks_map)
+		}
+	}()
 }
 
 func connect() (*mongo.Client, context.Context) {
@@ -329,8 +465,18 @@ func connectQueue(conn *amqp.Connection) (amqp.Queue, *amqp.Channel) {
 	ch, err := conn.Channel()
 	failOnError(err, "Failed to open a channel")
 
-	// Declare a queue
 	q, err := ch.QueueDeclare(
+		"trigger", // Queue name
+		false,     // Durable
+		false,     // Delete when unused
+		false,     // Exclusive
+		false,     // No-wait
+		nil,       // Arguments
+	)
+	failOnError(err, "Failed to declare a queue")
+
+	// Declare a queue
+	q, err = ch.QueueDeclare(
 		"worker", // Queue name
 		false,    // Durable
 		false,    // Delete when unused
