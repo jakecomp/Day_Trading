@@ -49,6 +49,9 @@ type TriggerStore struct {
 	lock    sync.RWMutex
 }
 
+type ThreadSafeTriggerStore struct {
+}
+
 func (sh *TriggerStore) Get(user string) (UserTriggers, bool) {
 	sh.lock.RLock()
 	p, ok := sh.userMap[user]
@@ -173,6 +176,8 @@ func push_trigger(user_id string, current_price float64, current_triger Trigger,
 
 func check_triggers() {
 
+	triggerStore.lock.Lock()
+
 	// Iterate through each user
 	userMap := triggerStore.userMap
 	for user_key, all_triggers := range userMap {
@@ -198,6 +203,8 @@ func check_triggers() {
 			}
 		}
 	}
+
+	triggerStore.lock.Unlock()
 
 }
 
