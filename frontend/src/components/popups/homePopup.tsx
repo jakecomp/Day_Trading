@@ -34,3 +34,13 @@ export const HistoryPopUp = (props: any) => {
         </div>
     ) : null
 }
+
+export const SuccessPopUp = (props: any) => {
+    return props.trigger ? (
+        <div>
+            <PopupBackground>
+                <LoggedCard>{props.children}</LoggedCard>
+            </PopupBackground>
+        </div>
+    ) : null
+}

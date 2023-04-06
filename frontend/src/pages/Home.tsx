@@ -31,7 +31,7 @@ import { StatusCard, StocksCard, TradesCard } from '../components/home/card'
 import { Header1, Header2, Header3, Header4 } from '../components/atoms/fonts'
 import { BigBlackButton, MediumBlackButton, SmallBlackButton } from '../components/atoms/button'
 import { useState } from 'react'
-import { BuyPopUp, HistoryPopUp, SellPopUp } from '../components/popups/homePopup'
+import { BuyPopUp, HistoryPopUp, SellPopUp, SuccessPopUp } from '../components/popups/homePopup'
 import { FieldForm, InputLabel, SignField } from '../components/sign_in/field'
 import { InputComponentContainer, InputContainer } from '../components/sign_in/containers'
 import {
@@ -41,6 +41,8 @@ import {
     HistoryPopupContainer,
 } from '../components/popups/containers'
 import { useForm } from 'react-hook-form'
+import { SignInPopUp } from '../components/popups/signinpopup'
+import { SimpleLink } from '../components/atoms/links'
 
 export const Home = (props: any) => {
     const [buyPopup, setBuyPopup] = useState(false)
@@ -48,16 +50,26 @@ export const Home = (props: any) => {
     const [historyPopup, setHistoryPopup] = useState(false)
     const [stockId, setStockId] = useState(0)
     const [stockList, setStockList] = useState('')
+    const [SignUpPopUp, setSignUpPopup] = useState(false)
+    const [SignInPopUp, setSignInPopup] = useState(true)
+    const [command, setCommand] = useState('')
+    const [args, setArgs] = useState('')
+    const [successPopUp, setSuccessPopUp] = useState(false)
 
-    interface valueForm {
-        buy: number
-        autobuy: number
-        sell: number
-        autoSell: number
+    interface commandForm {
+        ticket: number
+        command: string
+        args1: string
+        args2: FunctionStringCallback
     }
 
-    const { register, handleSubmit } = useForm<valueForm>({ mode: 'onSubmit' })
+    const { register, handleSubmit } = useForm<commandForm>({ mode: 'onSubmit' })
 
+    const handleSuccess = () => {
+        setSuccessPopUp(false)
+        setBuyPopup(false)
+        setSellPopup(false)
+    }
     const handleBuy = (index: number, list: any) => {
         setBuyPopup(true)
         setStockId(index)
@@ -70,28 +82,163 @@ export const Home = (props: any) => {
         setStockList(list)
     }
 
-    const RetrieveBuyData = (data: valueForm) => {
-        console.log('Buy')
+    let socket: WebSocket
+
+    const RetrieveData = (data: commandForm) => {
         console.log(data)
+        setSuccessPopUp(true)
+        const report = {
+            ticket: 0,
+            command: 'SET_AUTO_BUY',
+            args: data.command,
+        }
+        console.log(report)
+
+        try {
+            fetch('http://10.9.0.4:8000/', {
+                method: 'POST',
+                headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+                body: JSON.stringify(report),
+            })
+                .then((response) => response.text())
+                .then((response) => {
+                    socket = new WebSocket('ws://10.9.0.4:8000/ws?token=' + response)
+                    socket.onopen = function () {
+                        socket.send('Hi Hi Server')
+                        socket.onmessage = (msg: any) => {
+                            console.log('Server Message: ' + msg.data)
+                        }
+                    }
+                })
+        } catch (error) {
+            console.error(error)
+        }
     }
 
-    const RetrieveAutoBuyData = (data: valueForm) => {
-        console.log('AutoBuy')
+    const RetrieveBuyData = (data: commandForm) => {
         console.log(data)
+        const report = {
+            ticket: 0,
+            command: 'COMMIT_BUY',
+            args: data.args1,
+        }
+        console.log(report)
+
+        try {
+            fetch('http://10.9.0.4:8000/', {
+                method: 'POST',
+                headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+                body: JSON.stringify(report),
+            })
+                .then((response) => response.text())
+                .then((response) => {
+                    socket = new WebSocket('ws://10.9.0.4:8000/ws?token=' + response)
+                    socket.onopen = function () {
+                        socket.send('Hi Hi Server')
+                        socket.onmessage = (msg: any) => {
+                            console.log('Server Message: ' + msg.data)
+                        }
+                    }
+                })
+        } catch (error) {
+            console.error(error)
+        }
     }
 
-    const RetrieveSellData = (data: valueForm) => {
-        console.log('Sell')
+    const RetrieveAutoBuyData = (data: commandForm) => {
         console.log(data)
+        setSuccessPopUp(true)
+        const report = {
+            ticket: 0,
+            command: 'SET_AUTO_BUY',
+            args: data.args2,
+        }
+        console.log(report)
+
+        try {
+            fetch('http://10.9.0.4:8000/', {
+                method: 'POST',
+                headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+                body: JSON.stringify(report),
+            })
+                .then((response) => response.text())
+                .then((response) => {
+                    socket = new WebSocket('ws://10.9.0.4:8000/ws?token=' + response)
+                    socket.onopen = function () {
+                        socket.send('Hi Hi Server')
+                        socket.onmessage = (msg: any) => {
+                            console.log('Server Message: ' + msg.data)
+                        }
+                    }
+                })
+        } catch (error) {
+            console.error(error)
+        }
     }
 
-    const RetrieveAutoSellData = (data: valueForm) => {
-        console.log('AutoSell')
+    const RetrieveSellData = (data: commandForm) => {
         console.log(data)
+        const report = {
+            ticket: 0,
+            command: 'COMMIT_SELL',
+            args: data.args1,
+        }
+        console.log(report)
+
+        try {
+            fetch('http://10.9.0.4:8000/', {
+                method: 'POST',
+                headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+                body: JSON.stringify(report),
+            })
+                .then((response) => response.text())
+                .then((response) => {
+                    socket = new WebSocket('ws://10.9.0.4:8000/ws?token=' + response)
+                    socket.onopen = function () {
+                        socket.send('Hi Hi Server')
+                        socket.onmessage = (msg: any) => {
+                            console.log('Server Message: ' + msg.data)
+                        }
+                    }
+                })
+        } catch (error) {
+            console.error(error)
+        }
+    }
+
+    const RetrieveAutoSellData = (data: commandForm) => {
+        console.log(data)
+        setSuccessPopUp(true)
+        const report = {
+            ticket: 0,
+            command: 'SET_AUTO_SELL',
+            args: data.args2,
+        }
+        console.log(report)
+
+        try {
+            fetch('http://10.9.0.4:8000/home', {
+                method: 'POST',
+                headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+                body: JSON.stringify(report),
+            })
+                .then((response) => response.text())
+                .then((response) => {
+                    socket = new WebSocket('ws://10.9.0.4:8000/ws?token=' + response)
+                    socket.onopen = function () {
+                        socket.send('Hi Hi Server')
+                        socket.onmessage = (msg: any) => {
+                            console.log('Server Message: ' + msg.data)
+                        }
+                    }
+                })
+        } catch (error) {
+            console.error(error)
+        }
     }
 
     // User Data
-    const retrievedName = 'Anita B. Etin'
+    const retrievedName = 'JSmith'
     const tradingBalanceValue = '$5,291'
     const investmentValue = '$7,042'
     const rateofReturnValue = '148%'
@@ -202,20 +349,6 @@ export const Home = (props: any) => {
                             <DataName>Investment</DataName>
                         </DataTextContainer>
                     </DataContainer>
-                    <DataContainer>
-                        <img src={lable} />
-                        <DataTextContainer>
-                            <DataValue>{rateofReturnValue}</DataValue>
-                            <DataName>Rate of Return</DataName>
-                        </DataTextContainer>
-                    </DataContainer>
-                    <DataContainer>
-                        <img src={paper} />
-                        <DataTextContainer>
-                            <DataValue>{numberOfTradesValue}</DataValue>
-                            <DataName>Number of Trades</DataName>
-                        </DataTextContainer>
-                    </DataContainer>
                 </StatusCard>
                 <BottomContainer>
                     <TradesCard>
@@ -241,9 +374,9 @@ export const Home = (props: any) => {
                 <Header3>{stockList[stockId]} BUY</Header3>
                 <InputContainer>
                     <InputComponentContainer onSubmit={handleSubmit(RetrieveBuyData)}>
-                        <InputLabel>Buy more</InputLabel>
+                        <InputLabel>Automatic Buy</InputLabel>
                         <InputPopupContainer>
-                            <SignField {...register('buy')}></SignField>
+                            <SignField placeholder='Set amount' {...register('args1')}></SignField>
                             <BigBlackButton
                                 style={{ width: '100px', height: '40px' }}
                                 // onClick={() => setBuyPopup(false)}
@@ -256,7 +389,7 @@ export const Home = (props: any) => {
                     <InputComponentContainer onSubmit={handleSubmit(RetrieveAutoBuyData)}>
                         <InputLabel>Automatic Buy</InputLabel>
                         <InputPopupContainer>
-                            <SignField placeholder='Set amount' {...register('autobuy')}></SignField>
+                            <SignField placeholder='Set amount' {...register('args2')}></SignField>
                             <BigBlackButton
                                 style={{ width: '100px', height: '40px' }}
                                 // onClick={() => setBuyPopup(false)}
@@ -277,7 +410,7 @@ export const Home = (props: any) => {
                     <InputComponentContainer onSubmit={handleSubmit(RetrieveSellData)}>
                         <InputLabel>Sell stocks</InputLabel>
                         <InputPopupContainer>
-                            <SignField {...register('sell')}></SignField>
+                            <SignField placeholder='Set amount' {...register('args1')}></SignField>
                             <BigBlackButton
                                 style={{ width: '100px', height: '40px' }}
                                 // onClick={() => setSellPopup(false)}
@@ -290,7 +423,7 @@ export const Home = (props: any) => {
                     <InputComponentContainer onSubmit={handleSubmit(RetrieveAutoSellData)}>
                         <InputLabel>Automatic Sell</InputLabel>
                         <InputPopupContainer>
-                            <SignField placeholder='Set amount' {...register('autoSell')}></SignField>
+                            <SignField placeholder='Set amount' {...register('args2')}></SignField>
                             <BigBlackButton
                                 style={{ width: '100px', height: '40px' }}
                                 // onClick={() => setSellPopup(false)}
@@ -311,6 +444,13 @@ export const Home = (props: any) => {
                     <HistoryContainer style={{ height: historyLengthFlag }}>{listHistory}</HistoryContainer>
                 </HistoryPopupContainer>
             </HistoryPopUp>
+
+            <SuccessPopUp trigger={successPopUp}>
+                <Header3>Transaction complete!</Header3>
+                <BigBlackButton style={{ width: '300px' }} onClick={handleSuccess}>
+                    OK
+                </BigBlackButton>
+            </SuccessPopUp>
         </div>
     )
 }
