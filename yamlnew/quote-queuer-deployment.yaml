@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    kompose.cmd: kompose convert -f docker-compose.yml
+    kompose.version: 1.28.0 (c4137012e)
+  creationTimestamp: null
+  labels:
+    io.kompose.service: quote-queuer
+  name: quote-queuer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      io.kompose.service: quote-queuer
+  strategy: {}
+  template:
+    metadata:
+      annotations:
+        kompose.cmd: kompose convert -f docker-compose.yml
+        kompose.version: 1.28.0 (c4137012e)
+      creationTimestamp: null
+      labels:
+        io.kompose.network/net-10.9.0.0: "true"
+        io.kompose.service: quote-queuer
+    spec:
+      containers:
+        - image: quote-queuer
+          name: quote-queuer
+          resources: {}
+      restartPolicy: Always
+status: {}
