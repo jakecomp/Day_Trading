@@ -132,7 +132,7 @@ func Signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Fprintf(w, "SUCCESS")
+	// fmt.Fprintf(w, "SUCCESS")
 }
 
 func Signin(w http.ResponseWriter, r *http.Request) {
@@ -246,7 +246,7 @@ func socketReader(conn *websocket.Conn) {
 				var new_quote quote
 				// DO WE KNOW THIS STOCK?
 				if _, ok := stocks_map.GetStock(cmd.Args[1]); !ok {
-					println("Stock is not in map, updating map...")
+					// println("Stock is not in map, updating map...")
 					requestStockPrice(cmd.Args[1])
 				}
 
@@ -266,14 +266,14 @@ func socketReader(conn *websocket.Conn) {
 
 				_, err = http.Post("http://10.9.0.9:8004/quotelog", "application/json", bytes.NewBuffer(log_bytes))
 				if err != nil {
-					fmt.Println(err)
+					// fmt.Println(err)
 				}
 			} else if stringInSlice(cmd.Command, []string{"SET_BUY_AMOUNT", "SET_SELL_AMOUNT", "SET_BUY_TRIGGER", "SET_SELL_TRIGGER", "CANCEL_SET_BUY", "CANCEL_SET_SELL"}) {
 
 				if !stringInSlice(cmd.Command, []string{"CANCEL_BUY", "CANCEL_SELL"}) {
 					// DO WE KNOW THIS STOCK?
 					if _, ok := stocks_map.GetStock(cmd.Args[1]); !ok {
-						println("Stock is not in map, updating map...")
+						// println("Stock is not in map, updating map...")
 						requestStockPrice(cmd.Args[1])
 					}
 				}
@@ -289,10 +289,10 @@ func socketReader(conn *websocket.Conn) {
 						Body:        []byte(msg),
 					},
 				)
-				println(" [x] Sent Trigger %s", msg)
+				// println(" [x] Sent Trigger %s", msg)
 				failOnError(err, "Failed to publish a message")
 			} else {
-				fmt.Printf("Received Unknown Command: %s\n", cmd.Command)
+				// fmt.Printf("Received Unknown Command: %s\n", cmd.Command)
 			}
 		}
 		// This Should return success or failure eventually

@@ -199,7 +199,7 @@ func check_triggers() {
 					push_trigger(user_key, current_price, current_trigger, "FORCE_SELL")
 				}
 			} else {
-				fmt.Println("UNKNOWN TRIGGER COMMAND")
+				// fmt.Println("UNKNOWN TRIGGER COMMAND")
 			}
 		}
 	}
@@ -307,7 +307,7 @@ func triggerListener(queue amqp.Queue) {
 				panic(err)
 			}
 
-			log.Printf("Received a trigger ticket! %s", cmd.Command)
+			// log.Printf("Received a trigger ticket! %s", cmd.Command)
 
 			if cmd.Command == "SET_BUY_AMOUNT" {
 				amount, _ := strconv.ParseFloat(cmd.Args[2], 64)
