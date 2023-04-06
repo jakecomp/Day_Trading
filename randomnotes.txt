@@ -1,0 +1,404 @@
+//for struggles with rootless d
+sudo mkdir /sys/fs/cgroup/systemd && sudo mount -t cgroup -o none,name=systemd cgroup /sys/fs/cgroup/systemd.
+
+
+minikube start
+minikube start --nodes=1 --driver=docker 
+
+Title: Cluster Resources Failed. Description: Error: ENOENT: no such file or directory, open '/home/birdy/.minikube/ca.crt'.
+
+minikube addons enable [ADDON_NAME]
+minikube addons disable [ADDON_NAME]
+
+helm repo add longhorn https://charts.longhorn.io
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo add  traefik https://helm.traefik.io/mesh
+
+
+helm repo update
+helm install longhorn longhorn/longhorn --namespace longhorn-system --create-namespace --version 1.4.1
+kubectl -n longhorn-system get pod
+
+//rootless iinstalll
+dockerd-rootless-setuptool.sh install -f
+docker context use rootless
+minikube start --driver=docker --container-runtime=containerd
+
+go install github.com/kubernetes/kompose@latest
+kompose convert -f docker-compose.yaml
+kubectl apply -f .
+
+curl -L https://github.com/kubernetes/kompose/releases/download/v1.28.0/kompose-linux-amd64 -o kompose
+chmod +x kompose
+sudo mv ./kompose /usr/local/bin/kompose
+
+krew for kubectl
+(
+  set -x; cd "$(mktemp -d)" &&
+  OS="$(uname | tr '[:upper:]' '[:lower:]')" &&
+  ARCH="$(uname -m | sed -e 's/x86_64/amd64/' -e 's/\(arm\)\(64\)\?.*/\1\2/' -e 's/aarch64$/arm64/')" &&
+  KREW="krew-${OS}_${ARCH}" &&
+  curl -fsSLO "https://github.com/kubernetes-sigs/krew/releases/latest/download/${KREW}.tar.gz" &&
+  tar zxvf "${KREW}.tar.gz" &&
+  ./"${KREW}" install krew
+)
+
+//add to bashrc or zshrc
+export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
+echo "export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"" >> ~/.zshrc
+
+----------------------------------really rndm notes-----------------------------------------------------------------------------------
+
+
+
+
+NAME: traefik-1679949903
+LAST DEPLOYED: Mon Mar 27 13:45:03 2023
+NAMESPACE: default
+STATUS: deployed
+REVISION: 1
+TEST SUITE: None
+NOTES:
+Traefik Proxy v2.9.8 has been deployed successfully
+on default namespace !
+
+Traefik Hub integration is enabled ! With your specific parameters,
+`metricsURL`, `tunnelHost` and `tunnelPort` needs to be set accordingly
+on hub-agent Helm Chart. Based on this Chart, it should be:
+
+  --set controllerDeployment.traefik.metricsURL=http://traefik-hub.default.svc.cluster.local:9100/metrics
+  --set tunnelDeployment.traefik.tunnelHost=traefik-hub.default.svc.cluster.local
+  --set tunnelDeployment.traefik.tunnelPort=9901
+
+See https://doc.traefik.io/traefik-hub/install/#traefik-hub-agent-install-with-helmchart
+
+
+
+
+manager: kube-vpnkit-forwarder
+
+experimental:
+  plugins:
+    souin:
+      moduleName: "github.com/darkweak/souin"
+      version: "v1.6.35"
+	  
+	  
+	  
+	  
+	  
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+    name: my-souin
+    namespace: my-namespace
+spec:
+    plugin:
+        souin:
+            api:
+                prometheus: ""
+                souin: ""
+            default_cache:
+                headers:
+                    - Authorization
+                    - Content-Type
+                regex:
+                    exclude: ARegexHere
+                ttl: 10s
+            log_level: debug
+            urls:
+                domain.com/testing:
+                    headers:
+                        - Authorization
+                    ttl: 2s
+                mysubdomain.domain.com:
+                    headers:
+                        - Authorization
+                        - Content-Type
+                    ttl: 50s
+            ykeys:
+                The_First_Test:
+                    headers:
+                        Content-Type: .+
+                The_Second_Test:
+                    url: the/second/.+
+
+192.168.1.254
+127.0.0.1
+
+entryPoints:
+  websecure:
+    address: ':443'
+    http:
+      tls:
+        certResolver: leresolver
+		
+		
+providers:
+  providersThrottleDuration: 10s
+  
+basic out to local from serivce yaml
+--------------------------
+  apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bb-demo
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      bb: web
+  template:
+    metadata:
+      labels:
+        bb: web
+    spec:
+      containers:
+      - name: bb-site
+        image: getting-started
+        imagePullPolicy: Never
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bb-entrypoint
+  namespace: default
+spec:
+  type: NodePort
+  selector:
+    bb: web
+  ports:
+  - port: 3000
+    targetPort: 3000
+    nodePort: 30001
+
+    target: the container port
+    published: the publicly exposed port. Can be set as a range using syntax start-end, so it is defined as a string, then actual port SHOULD be assigned within this range based on available ports.
+	
+    host_ip: the Host IP mapping, unspecified means all network interfaces (0.0.0.0)
+    protocol: the port protocol (tcp or udp), unspecified means any protocol
+    mode: host for publishing a host port on each node, or ingress for a port to be load balanced.
+
+ports:
+  - target: 80
+    host_ip: 127.0.0.1
+    published: "8080"
+    protocol: tcp
+    mode: host
+
+  - target: 80
+    host_ip: 127.0.0.1
+    published: "8000-9000"
+    protocol: tcp
+    mode: host
+
+While this definition works with Minikube in most cases, if you hit trouble, make sure that your ~/.kube/config file and Minikube certs reference your host's IP rather than 127.0.0.1 or localhost (since localhost resolve to the container itself rather than your local machine where Minikube is running).
+
+This should happen by default on Linux. On macOS and Windows, we recommend using the Kuberntes install that comes with Docker Desktop instead of Minikube to avoid these kinds of issues.
+
+[Environment]::SetEnvironmentVariable("key", "value", [EnvironmentVariableTarget]::User)
+
+
+#nginx for ingress in minikube----------------------
+
+Ingress and port forwarding
+
+When configuring Ingress for your Kubernetes cluster, note that by default Kubernetes will bind to a specific interface's IP rather than localhost or all interfaces. This is why you need to use the Kubernetes Node's IP when connecting - even if there's only one Node as in the case of Minikube. Port forwarding in Remote - Containers will allow you to specify <ip>:<port> in either the forwardPorts property or through the port forwarding UI in VS Code.
+
+
+
+minikube start
+minikube addons enable ingress
+# Run this to forward to localhost in the background
+nohup kubectl port-forward --pod-running-timeout=24h -n ingress-nginx service/ingress-nginx-controller :80 &
+
+///////autocomplete in zsh
+source <(kubectl completion zsh)
+echo "source <(k3s completion zsh)" >> ~/.zshrc
+echo "source <(kubectl completion zsh)" >> ~/.zshrc
+echo "source <(minikube completion zsh)" >> ~/.zshrc
+echo "source <(helm completion zsh)" >> ~/.zshrc
+
+echo "source <(helmwave completion zsh)" >> ~/.zshrc
+source <(helmwave completion zsh)
+
+----------------config.yaml
+write-kubeconfig-mode: "0644"
+tls-san:
+  - "foo.local"
+node-label:
+  - "foo=bar"
+  - "something=amazing"
+cluster-init: true
+token: "secret"
+debug: true
+
+//////place yaml here for addons /// helm stuff
+/var/lib/rancher/k3s/server/manifests
+
+/////after this kubeconfig
+/etc/rancher/k3s/config.yaml
+
+//flags for startiong k3
+--cluster-cidr=10.200.0.0/16
+--service-cidr=
+--flannel-backend=wireguard-native
+--disable-network-policy
+--node-name
+--prefer-bundled-bin
+--etcd-expose-metrics  
+--docker ////must use curl https://releases.rancher.com/install-docker/20.10.sh | sh //////////first
+--container-runtime-endpoint value ///if u wanna use socket 4 docker
+K3S_NODE_NAME
+INSTALL_K3S_SKIP_SELINUX_RPM=true
+
+curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" INSTALL_K3S_EXEC="server" K3S_DATASTORE_ENDPOINT="https://etcd-host-1:2379,https://etcd-host-2:2379,https://etcd-host-3:2379" INSTALL_K3S_SKIP_SELINUX_RPM=true sh -s -
+
+
+/var/lib/rancher/k3s/server/agent-token
+/var/lib/rancher/k3s/server/token --stored after it created from init
+or---
+k3s token create [token]
+or
+k3s token generate ---- see k3s.io/cli/token for flags
+//multinode
+curl -sfL https://get.k3s.io | K3S_TOKEN=SECRET sh -s - server --cluster-init
+curl -sfL https://get.k3s.io | K3S_TOKEN=SECRET sh -s - server --server https://<ip or hostname of server1>:6443
+curl -sfL https://get.k3s.io | K3S_TOKEN=SECRET sh -s - server --server https://<ip or hostname of server1>:6443
+
+///config access
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+kubectl get pods --all-namespaces
+helm ls --all-namespaces
+////outside clusterr from outside
+Copy /etc/rancher/k3s/k3s.yaml on your machine located outside the cluster as ~/.kube/config. Then replace the value of the server field with the IP or name of your K3s server. kubectl can now manage your K3s cluster.
+
+///viwe logs
+When running with systemd, logs will be created in /var/log/syslog and viewed using journalctl -u k3s (or journalctl -u k3s-agent on agents).
+
+kubectl create -f pvc.yaml
+kubectl create -f pod.yaml
+kubectl get pv
+kubectl get pvc
+
+/var/lib/rancher/k3s/server/manifests/traefik.yaml //replace mby? from helm not manual
+
+Adding the svccontroller.k3s.cattle.io/enablelb=true label to one or more nodes switches the ServiceLB controller into allow-list mode, where only nodes with the label are eligible to host LoadBalancer pods. Nodes that remain unlabeled will be excluded from use by ServiceLB.
+
+///helm get repo
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo update
+source <(helm completion zsh)
+
+////for logging
+helm repo add rancher-charts https://charts.rancher.io
+helm repo update
+helm install --create-namespace -n cattle-logging-system rancher-logging-crd rancher-charts/rancher-logging-crd
+helm install --create-namespace -n cattle-logging-system rancher-logging --set additionalLoggingSources.k3s.enabled=true rancher-charts/rancher-logging
+
+For example, if both nginx and memcached together provide performance optimizations for the main app in the chart, and are required to both be present when that feature is enabled, then they should both have a tags section like this:
+
+tags:
+  - webaccelerator
+  
+  
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.7.0/aio/deploy/recommended.yaml
+kubectl proxy
+http://localhost:8001/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:/proxy/
+minikube dashboard 
+minikube addons enable ingress 
+minikube addons enable ingress-dns
+minikube addons enable volumesnapshots
+minikube addons enable csi-hostpath-driver
+minikube -p creater-cluster addons enable metrics-server
+minikube node add 1 
+
+
+minikube start --container-runtime=docker --extra-config=
+
+helm repo add stable https://charts.helm.sh/stable --force-update
+helm repo add incubator https://charts.helm.sh/incubator --force-update
+kubectl create -f rbac-config.yaml
+
+helm install bitnami/mysql --generate-name
+
+
+sudo apt-get update
+sudo apt-get install -y apt-transport-https ca-certificates curl
+sudo curl -fsSLo /etc/apt/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
+echo "deb [signed-by=/etc/apt/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+sudo apt-get update
+sudo apt-get install -y kubelet kubeadm kubectl
+sudo apt-mark hold kubelet kubeadm kubectl
+
+//upg kubeadm
+apt-mark unhold kubeadm && \
+apt-get update && apt-get install -y kubeadm=1.26.x-00 && \
+apt-mark hold kubeadm
+
+
+/////////krew for 
+(
+  set -x; cd "$(mktemp -d)" &&
+  OS="$(uname | tr '[:upper:]' '[:lower:]')" &&
+  ARCH="$(uname -m | sed -e 's/x86_64/amd64/' -e 's/\(arm\)\(64\)\?.*/\1\2/' -e 's/aarch64$/arm64/')" &&
+  KREW="krew-${OS}_${ARCH}" &&
+  curl -fsSLO "https://github.com/kubernetes-sigs/krew/releases/latest/download/${KREW}.tar.gz" &&
+  tar zxvf "${KREW}.tar.gz" &&
+  ./"${KREW}" install krew
+)
+
+export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
+kubectl krew search
+
+//install and userpolicy
+kubectl krew install xxx
+kubectl xxx
+
+
+
+bitnami/redis-cluster
+bitnami/rabbitmq-cluster-operator  
+bitnami/mongodb-sharded
+
+helm plugin install https://github.com/HamzaZo/helm-adopt
+helm plugin update adopt
+
+ helm plugin install https://github.com/komodorio/helm-dashboard.git
+ helm plugin update dashboard  
+ helm dashboard
+ 
+ //run in docker or use k3d
+ sudo docker run \
+  --privileged \
+  --name k3s-server-1 \
+  --hostname k3s-server-1 \
+  -p 6443:6443 \
+  -d rancher/k3s:v1.24.10-k3s1 \
+  server
+  
+ sudo docker cp k3s-server-1:/etc/rancher/k3s/k3s.yaml ~/.kube/config
+ 
+ Configuring an HTTP proxy k3s
+
+If you are running K3s in an environment, which only has external connectivity through an HTTP proxy, you can configure your proxy settings on the K3s systemd service. These proxy settings will then be used in K3s and passed down to the embedded containerd and kubelet.
+
+The K3s installation script will automatically take the HTTP_PROXY, HTTPS_PROXY and NO_PROXY, as well as the CONTAINERD_HTTP_PROXY, CONTAINERD_HTTPS_PROXY and CONTAINERD_NO_PROXY variables from the current shell, if they are present, and write them to the environment file of your systemd service, usually:
+
+    /etc/systemd/system/k3s.service.env
+    /etc/systemd/system/k3s-agent.service.env
+
+Of course, you can also configure the proxy by editing these files.
+
+K3s will automatically add the cluster internal Pod and Service IP ranges and cluster DNS domain to the list of NO_PROXY entries. You should ensure that the IP address ranges used by the Kubernetes nodes themselves (i.e. the public and private IPs of the nodes) are included in the NO_PROXY list, or that the nodes can be reached through the proxy.
+
+HTTP_PROXY=http://your-proxy.example.com:8888
+HTTPS_PROXY=http://your-proxy.example.com:8888
+NO_PROXY=127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+
+If you want to configure the proxy settings for containerd without affecting K3s and the Kubelet, you can prefix the variables with CONTAINERD_:
+
+CONTAINERD_HTTP_PROXY=http://your-proxy.example.com:8888
+CONTAINERD_HTTPS_PROXY=http://your-proxy.example.com:8888
+CONTAINERD_NO_PROXY=127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
