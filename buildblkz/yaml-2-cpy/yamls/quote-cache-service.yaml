@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: null
+  labels:
+    move2kube.konveyor.io/service: quote-cache
+  name: quote-cache
+spec:
+  externalTrafficPolicy: Cluster
+  internalTrafficPolicy: Cluster
+  ports:
+    - name: port-6379
+      port: 6379
+      protocol: TCP
+      targetPort: 6379
+  selector:
+    move2kube.konveyor.io/service: quote-cache
+  sessionAffinity: None
+  type: NodePort
+status:
+  loadBalancer: {}

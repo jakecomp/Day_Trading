@@ -1,0 +1,25 @@
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+    creationTimestamp: null
+    labels:
+        move2kube.konveyor.io/service: stockapp
+    name: stockapp
+spec:
+    rules:
+        - host: stockapp.com
+          http:
+            paths:
+                - backend:
+                    service:
+                        name: el-stockapp-git-repo
+                        port:
+                            name: port-8080
+                  path: /el-stockapp-git-repo
+                  pathType: Prefix
+status:
+    loadBalancer: {}
+
+...

@@ -1,0 +1,25 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  creationTimestamp: null
+  labels:
+    move2kube.konveyor.io/service: backend-api
+  name: backend-api
+spec:
+  template:
+    metadata:
+      creationTimestamp: null
+    spec:
+      containers:
+        - image: quay.io/stockapp/backend-api:latest
+          imagePullPolicy: Always
+          name: backend-api
+          ports:
+            - containerPort: 8080
+            - containerPort: 8000
+          resources: {}
+      imagePullSecrets:
+        - name: quay-io-imagepullsecret
+      restartPolicy: Always
+      securityContext: {}
+status: {}

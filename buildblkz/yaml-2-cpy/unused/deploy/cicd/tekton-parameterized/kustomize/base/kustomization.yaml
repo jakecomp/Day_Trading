@@ -1,0 +1,12 @@
+resources:
+  - stockapp-run-clone-build-push-triggertemplate.yaml
+  - stockapp-tekton-triggers-admin-rolebinding.yaml
+  - stockapp-clone-build-push-pipeline.yaml
+  - stockapp-clone-push-serviceaccount.yaml
+  - stockapp-git-event-triggerbinding.yaml
+  - stockapp-ingress.yaml
+  - stockapp-tekton-triggers-admin-serviceaccount.yaml
+  - quay-io-imagepullsecret-secret.yaml
+  - stockapp-git-repo-eventlistener.yaml
+  - stockapp-image-registry-secret.yaml
+  - stockapp-tekton-triggers-admin-role.yaml

@@ -1,0 +1,436 @@
+
+---
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+    creationTimestamp: null
+    name: stockapp-clone-build-push
+spec:
+    params:
+        - description: registry-domain/namespace where the output image should be pushed.
+          name: image-registry-url
+          type: string
+    tasks:
+        - name: clone-1
+          params:
+            - name: url
+              value: '<TODO: insert git repo url>'
+            - name: revision
+              value: main
+            - name: deleteExisting
+              value: "true"
+          taskRef:
+            name: git-clone
+          workspaces:
+            - name: output
+              workspace: stockapp-shared-data
+        - name: build-push-1
+          params:
+            - name: IMAGE
+              value: $(params.image-registry-url)/backend-api
+            - name: DOCKERFILE
+              value: backend_api/Dockerfile
+            - name: CONTEXT
+              value: backend_api
+          runAfter:
+            - clone-1
+          taskRef:
+            name: kaniko
+          workspaces:
+            - name: source
+              workspace: stockapp-shared-data
+        - name: clone-2
+          params:
+            - name: url
+              value: '<TODO: insert git repo url>'
+            - name: revision
+              value: main
+            - name: deleteExisting
+              value: "true"
+          runAfter:
+            - build-push-1
+          taskRef:
+            name: git-clone
+          workspaces:
+            - name: output
+              workspace: stockapp-shared-data
+        - name: build-push-2
+          params:
+            - name: IMAGE
+              value: $(params.image-registry-url)/log-service:latest
+            - name: DOCKERFILE
+              value: log_service/Dockerfile
+            - name: CONTEXT
+              value: log_service
+          runAfter:
+            - clone-2
+          taskRef:
+            name: kaniko
+          workspaces:
+            - name: source
+              workspace: stockapp-shared-data
+        - name: clone-3
+          params:
+            - name: url
+              value: '<TODO: insert git repo url>'
+            - name: revision
+              value: main
+            - name: deleteExisting
+              value: "true"
+          runAfter:
+            - build-push-2
+          taskRef:
+            name: git-clone
+          workspaces:
+            - name: output
+              workspace: stockapp-shared-data
+        - name: build-push-3
+          params:
+            - name: IMAGE
+              value: $(params.image-registry-url)/quote-server:latest
+            - name: DOCKERFILE
+              value: quote_server/Dockerfile
+            - name: CONTEXT
+              value: quote_server
+          runAfter:
+            - clone-3
+          taskRef:
+            name: kaniko
+          workspaces:
+            - name: source
+              workspace: stockapp-shared-data
+        - name: clone-4
+          params:
+            - name: url
+              value: '<TODO: insert git repo url>'
+            - name: revision
+              value: main
+            - name: deleteExisting
+              value: "true"
+          runAfter:
+            - build-push-3
+          taskRef:
+            name: git-clone
+          workspaces:
+            - name: output
+              workspace: stockapp-shared-data
+        - name: build-push-4
+          params:
+            - name: IMAGE
+              value: $(params.image-registry-url)/quote-cache:latest
+            - name: DOCKERFILE
+              value: quote_cache/Dockerfile
+            - name: CONTEXT
+              value: quote_cache
+          runAfter:
+            - clone-4
+          taskRef:
+            name: kaniko
+          workspaces:
+            - name: source
+              workspace: stockapp-shared-data
+        - name: clone-5
+          params:
+            - name: url
+              value: '<TODO: insert git repo url>'
+            - name: revision
+              value: main
+            - name: deleteExisting
+              value: "true"
+          runAfter:
+            - build-push-4
+          taskRef:
+            name: git-clone
+          workspaces:
+            - name: output
+              workspace: stockapp-shared-data
+        - name: build-push-5
+          params:
+            - name: IMAGE
+              value: $(params.image-registry-url)/backend:latest
+            - name: DOCKERFILE
+              value: backend_api/Dockerfile
+            - name: CONTEXT
+              value: backend_api
+          runAfter:
+            - clone-5
+          taskRef:
+            name: kaniko
+          workspaces:
+            - name: source
+              workspace: stockapp-shared-data
+        - name: clone-6
+          params:
+            - name: url
+              value: '<TODO: insert git repo url>'
+            - name: revision
+              value: main
+            - name: deleteExisting
+              value: "true"
+          runAfter:
+            - build-push-5
+          taskRef:
+            name: git-clone
+          workspaces:
+            - name: output
+              workspace: stockapp-shared-data
+        - name: build-push-6
+          params:
+            - name: IMAGE
+              value: $(params.image-registry-url)/mongo-db:latest
+            - name: DOCKERFILE
+              value: mongodb/Dockerfile
+            - name: CONTEXT
+              value: mongodb
+          runAfter:
+            - clone-6
+          taskRef:
+            name: kaniko
+          workspaces:
+            - name: source
+              workspace: stockapp-shared-data
+        - name: clone-7
+          params:
+            - name: url
+              value: '<TODO: insert git repo url>'
+            - name: revision
+              value: main
+            - name: deleteExisting
+              value: "true"
+          runAfter:
+            - build-push-6
+          taskRef:
+            name: git-clone
+          workspaces:
+            - name: output
+              workspace: stockapp-shared-data
+        - name: build-push-7
+          params:
+            - name: IMAGE
+              value: $(params.image-registry-url)/frontend:latest
+            - name: DOCKERFILE
+              value: frontend/Dockerfile
+            - name: CONTEXT
+              value: frontend
+          runAfter:
+            - clone-7
+          taskRef:
+            name: kaniko
+          workspaces:
+            - name: source
+              workspace: stockapp-shared-data
+        - name: clone-8
+          params:
+            - name: url
+              value: '<TODO: insert git repo url>'
+            - name: revision
+              value: main
+            - name: deleteExisting
+              value: "true"
+          runAfter:
+            - build-push-7
+          taskRef:
+            name: git-clone
+          workspaces:
+            - name: output
+              workspace: stockapp-shared-data
+        - name: build-push-8
+          params:
+            - name: IMAGE
+              value: $(params.image-registry-url)/quote-server
+            - name: DOCKERFILE
+              value: quote_server/Dockerfile
+            - name: CONTEXT
+              value: quote_server
+          runAfter:
+            - clone-8
+          taskRef:
+            name: kaniko
+          workspaces:
+            - name: source
+              workspace: stockapp-shared-data
+        - name: clone-9
+          params:
+            - name: url
+              value: '<TODO: insert git repo url>'
+            - name: revision
+              value: main
+            - name: deleteExisting
+              value: "true"
+          runAfter:
+            - build-push-8
+          taskRef:
+            name: git-clone
+          workspaces:
+            - name: output
+              workspace: stockapp-shared-data
+        - name: build-push-9
+          params:
+            - name: IMAGE
+              value: $(params.image-registry-url)/queue-service
+            - name: DOCKERFILE
+              value: queue_service/Dockerfile
+            - name: CONTEXT
+              value: queue_service
+          runAfter:
+            - clone-9
+          taskRef:
+            name: kaniko
+          workspaces:
+            - name: source
+              workspace: stockapp-shared-data
+        - name: clone-10
+          params:
+            - name: url
+              value: '<TODO: insert git repo url>'
+            - name: revision
+              value: main
+            - name: deleteExisting
+              value: "true"
+          runAfter:
+            - build-push-9
+          taskRef:
+            name: git-clone
+          workspaces:
+            - name: output
+              workspace: stockapp-shared-data
+        - name: build-push-10
+          params:
+            - name: IMAGE
+              value: $(params.image-registry-url)/redis-cache
+            - name: DOCKERFILE
+              value: quote_cache/Dockerfile
+            - name: CONTEXT
+              value: quote_cache
+          runAfter:
+            - clone-10
+          taskRef:
+            name: kaniko
+          workspaces:
+            - name: source
+              workspace: stockapp-shared-data
+        - name: clone-11
+          params:
+            - name: url
+              value: '<TODO: insert git repo url>'
+            - name: revision
+              value: main
+            - name: deleteExisting
+              value: "true"
+          runAfter:
+            - build-push-10
+          taskRef:
+            name: git-clone
+          workspaces:
+            - name: output
+              workspace: stockapp-shared-data
+        - name: build-push-11
+          params:
+            - name: IMAGE
+              value: $(params.image-registry-url)/worker-service
+            - name: DOCKERFILE
+              value: worker_service/Dockerfile
+            - name: CONTEXT
+              value: worker_service
+          runAfter:
+            - clone-11
+          taskRef:
+            name: kaniko
+          workspaces:
+            - name: source
+              workspace: stockapp-shared-data
+        - name: clone-12
+          params:
+            - name: url
+              value: '<TODO: insert git repo url>'
+            - name: revision
+              value: main
+            - name: deleteExisting
+              value: "true"
+          runAfter:
+            - build-push-11
+          taskRef:
+            name: git-clone
+          workspaces:
+            - name: output
+              workspace: stockapp-shared-data
+        - name: build-push-12
+          params:
+            - name: IMAGE
+              value: $(params.image-registry-url)/worker:latest
+            - name: DOCKERFILE
+              value: worker_service/Dockerfile
+            - name: CONTEXT
+              value: worker_service
+          runAfter:
+            - clone-12
+          taskRef:
+            name: kaniko
+          workspaces:
+            - name: source
+              workspace: stockapp-shared-data
+        - name: clone-13
+          params:
+            - name: url
+              value: '<TODO: insert git repo url>'
+            - name: revision
+              value: main
+            - name: deleteExisting
+              value: "true"
+          runAfter:
+            - build-push-12
+          taskRef:
+            name: git-clone
+          workspaces:
+            - name: output
+              workspace: stockapp-shared-data
+        - name: build-push-13
+          params:
+            - name: IMAGE
+              value: $(params.image-registry-url)/m
+            - name: DOCKERFILE
+              value: cli_app/Dockerfile
+            - name: CONTEXT
+              value: cli_app
+          runAfter:
+            - clone-13
+          taskRef:
+            name: kaniko
+          workspaces:
+            - name: source
+              workspace: stockapp-shared-data
+        - name: clone-14
+          params:
+            - name: url
+              value: '<TODO: insert git repo url>'
+            - name: revision
+              value: main
+            - name: deleteExisting
+              value: "true"
+          runAfter:
+            - build-push-13
+          taskRef:
+            name: git-clone
+          workspaces:
+            - name: output
+              workspace: stockapp-shared-data
+        - name: build-push-14
+          params:
+            - name: IMAGE
+              value: $(params.image-registry-url)/log-service
+            - name: DOCKERFILE
+              value: log_service/Dockerfile
+            - name: CONTEXT
+              value: log_service
+          runAfter:
+            - clone-14
+          taskRef:
+            name: kaniko
+          workspaces:
+            - name: source
+              workspace: stockapp-shared-data
+    workspaces:
+        - description: This workspace will receive the cloned git repo and be passed to the kaniko task for building the image.
+          name: stockapp-shared-data
+
+...

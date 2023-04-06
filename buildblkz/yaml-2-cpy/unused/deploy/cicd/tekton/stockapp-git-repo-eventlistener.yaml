@@ -1,0 +1,17 @@
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: EventListener
+metadata:
+  creationTimestamp: null
+  name: stockapp-git-repo
+spec:
+  namespaceSelector: {}
+  resources: {}
+  serviceAccountName: stockapp-tekton-triggers-admin
+  triggers:
+    - bindings:
+        - ref: stockapp-git-event
+      template:
+        ref: stockapp-run-clone-build-push
+status:
+  configuration:
+    generatedName: ""

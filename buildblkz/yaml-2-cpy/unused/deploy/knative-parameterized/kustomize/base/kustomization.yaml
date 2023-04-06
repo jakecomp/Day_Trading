@@ -1,0 +1,14 @@
+resources:
+  - redis-cache-service.yaml
+  - worker-service-service.yaml
+  - worker-service.yaml
+  - m-service.yaml
+  - mongo-db-service.yaml
+  - quote-server-service.yaml
+  - rabbitmq-service.yaml
+  - queue-service-service.yaml
+  - quote-cache-service.yaml
+  - backend-api-service.yaml
+  - backend-service.yaml
+  - frontend-service.yaml
+  - log-service-service.yaml

@@ -1,0 +1,16 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  creationTimestamp: null
+  name: net-10.9.0.0
+spec:
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              move2kube.konveyor.io/network-net-10.9.0.0: "true"
+  podSelector:
+    matchLabels:
+      move2kube.konveyor.io/network-net-10.9.0.0: "true"
+  policyTypes:
+    - Ingress

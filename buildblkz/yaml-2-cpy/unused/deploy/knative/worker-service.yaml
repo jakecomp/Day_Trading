@@ -1,0 +1,25 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  creationTimestamp: null
+  labels:
+    move2kube.konveyor.io/service: worker
+  name: worker
+spec:
+  template:
+    metadata:
+      creationTimestamp: null
+    spec:
+      containers:
+        - image: quay.io/stockapp/worker:latest
+          imagePullPolicy: Always
+          name: worker
+          ports:
+            - containerPort: 8003
+              protocol: TCP
+          resources: {}
+      imagePullSecrets:
+        - name: quay-io-imagepullsecret
+      restartPolicy: Always
+      securityContext: {}
+status: {}

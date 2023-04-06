@@ -1,0 +1,26 @@
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+    creationTimestamp: null
+    name: stockapp-deploy
+    namespace: argocd
+spec:
+    destination:
+        server: https://kubernetes.default.svc
+    project: ""
+    source:
+        path: '<TODO: fill in the path to the folder containing the K8s yamls>'
+        repoURL: '<TODO: fill in the git/helm repo url>'
+status:
+    health: {}
+    summary: {}
+    sync:
+        comparedTo:
+            destination: {}
+            source:
+                repoURL: ""
+        status: ""
+
+...

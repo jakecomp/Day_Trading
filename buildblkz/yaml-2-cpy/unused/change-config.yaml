@@ -1,0 +1,17 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    image:
+      name: traefik
+      tag: v2.8.5
+    forwardedHeaders:
+      enabled: true
+      trustedIPs:
+        - 10.0.0.0/8
+    ssl:
+      enabled: true
+      permanentRedirect: false

@@ -1,0 +1,29 @@
+
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+    creationTimestamp: null
+    labels:
+        move2kube.konveyor.io/service: redis-cache
+    name: redis-cache
+spec:
+    template:
+        metadata:
+            creationTimestamp: null
+        spec:
+            containers:
+                - image: quay.io/stockapp/redis-cache:latest
+                  imagePullPolicy: Always
+                  name: redis-cache
+                  ports:
+                    - containerPort: 8080
+                    - containerPort: 6379
+                  resources: {}
+            imagePullSecrets:
+                - name: quay-io-imagepullsecret
+            restartPolicy: Always
+            securityContext: {}
+status: {}
+
+...
