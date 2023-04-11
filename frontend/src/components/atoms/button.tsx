@@ -19,9 +19,9 @@ export const BigBlackButton = styled.button`
 `
 
 export const MediumBlackButton = styled(BigBlackButton)`
-    width: 94px;
+    width: unset;
     height: 36px;
-    padding: 0px 64px;
+    padding: 0px 24px;
     border-radius: 16px;
     font-family: Monsterrat-Medium;
     font-size: 18px;
