@@ -1,13 +1,14 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  namespace: seng-trade-app
   annotations:
     kompose.cmd: kompose convert -f docker-compose.yml
     kompose.version: 1.28.0 (c4137012e)
-  creationTimestamp: null
   labels:
+    io.kompose.network/net-10.9.0.0: "true"
     io.kompose.service: quote-queuer
-  name: quote-queuer
+  name: quote-queuer-deploy
 spec:
   replicas: 1
   selector:
@@ -19,13 +20,13 @@ spec:
       annotations:
         kompose.cmd: kompose convert -f docker-compose.yml
         kompose.version: 1.28.0 (c4137012e)
-      creationTimestamp: null
       labels:
         io.kompose.network/net-10.9.0.0: "true"
         io.kompose.service: quote-queuer
     spec:
       containers:
-        - image: quote-queuer
+        - image: seng_468-quote_queuer
+          imagePullPolicy: IfNotPresent
           name: quote-queuer
           resources: {}
       restartPolicy: Always

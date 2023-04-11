@@ -12,7 +12,7 @@ RUN usermod -l kube-trader vscode \
     && mv /home/vscode /home/kube-trader \
     && export DEBIAN_FRONTEND=noninteractive \
     && ./ensure-mount-sources.sh \
-    && ./installdock.sh \ 
+    && sudo ./installdock.sh \ 
     && copy-kube-config/install.sh \
     && go install github.com/derailed/k9s@latest \
     # kubectl zsh completion

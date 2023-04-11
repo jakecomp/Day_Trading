@@ -1,13 +1,14 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  namespace: seng-trade-app
   annotations:
     kompose.cmd: kompose convert -f docker-compose.yml
     kompose.version: 1.28.0 (c4137012e)
-  creationTimestamp: null
   labels:
+    io.kompose.network/net-10.9.0.0: "true"
     io.kompose.service: quote-server
-  name: quote-server
+  name: quote-server-deploy
 spec:
   replicas: 1
   selector:
@@ -19,13 +20,13 @@ spec:
       annotations:
         kompose.cmd: kompose convert -f docker-compose.yml
         kompose.version: 1.28.0 (c4137012e)
-      creationTimestamp: null
       labels:
         io.kompose.network/net-10.9.0.0: "true"
         io.kompose.service: quote-server
     spec:
       containers:
-        - image: quote-server
+        - image: seng_468-quote_server
+          imagePullPolicy: IfNotPresent
           name: quote-server
           ports:
             - containerPort: 8002

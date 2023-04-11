@@ -1,13 +1,14 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  namespace: seng-trade-app
   annotations:
     kompose.cmd: kompose convert -f docker-compose.yml
     kompose.version: 1.28.0 (c4137012e)
-  creationTimestamp: null
   labels:
+    io.kompose.network/net-10.9.0.0: "true"
     io.kompose.service: backend
-  name: backend
+  name: backend-deploy
 spec:
   replicas: 1
   selector:
@@ -19,16 +20,17 @@ spec:
       annotations:
         kompose.cmd: kompose convert -f docker-compose.yml
         kompose.version: 1.28.0 (c4137012e)
-      creationTimestamp: null
       labels:
         io.kompose.network/net-10.9.0.0: "true"
         io.kompose.service: backend
     spec:
       containers:
-        - image: backend
+        - image: seng_468-backend
+          imagePullPolicy: IfNotPresent
           name: backend
           ports:
             - containerPort: 8000
+              protocol: TCP
           resources: {}
       restartPolicy: Always
 status: {}

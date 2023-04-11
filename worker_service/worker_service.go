@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/streadway/amqp"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/streadway/amqp"
 )
 
 const (
@@ -17,7 +18,7 @@ const (
 
 	MAX_CONCURRENT_JOBS = 300
 	redisHOST           = "10.9.0.7"
-	rabbitmqHOST        = "10.9.0.10"
+	rabbitmqHOST        = "10.9.0.15"
 	quoteHOST           = "10.9.0.6"
 	logHOST             = "10.9.0.9"
 )

@@ -82,7 +82,7 @@ services:
       - "15672:15672"
     networks:
       net-10.9.0.0:
-        ipv4_address: 10.9.0.10
+        ipv4_address: 10.9.0.15
     healthcheck:
       test: ["CMD", "nc", "-z", "localhost", "5672"]
       interval: 10s

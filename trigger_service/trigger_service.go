@@ -252,7 +252,7 @@ func main() {
 
 	// Connect to RabbitMQ server
 	time.Sleep(time.Second * 15)
-	conn, err := dial("amqp://guest:guest@10.9.0.10:5672/")
+	conn, err := dial("amqp://guest:guest@10.9.0.15:5672/")
 	failOnError(err, "Failed to connect to RabbitMQ")
 	defer conn.Close()
 

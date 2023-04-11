@@ -1,16 +1,19 @@
 apiVersion: v1
 kind: Service
 metadata:
+  namespace: seng-trade-app
   annotations:
     kompose.cmd: kompose convert -f docker-compose.yml
     kompose.version: 1.28.0 (c4137012e)
-  creationTimestamp: null
   labels:
+    io.kompose.network/net-10.9.0.0: "true"
     io.kompose.service: log-service
-  name: log_service
+  name: log-service
 spec:
+  clusterIP: 10.9.0.9
+  type: ClusterIP
   ports:
-    - name: "8004"
+    - name: log-port
       port: 8004
       targetPort: 8004
   selector:

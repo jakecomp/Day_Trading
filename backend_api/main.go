@@ -328,7 +328,7 @@ func handleRequests() {
 }
 func dial(url string) (*amqp.Connection, error) {
 	for {
-		conn, err := amqp.Dial("amqp://guest:guest@10.9.0.10:5672/")
+		conn, err := amqp.Dial("amqp://guest:guest@10.9.0.15:5672/")
 		if err == nil {
 			return conn, err
 		}
@@ -345,7 +345,7 @@ func main() {
 
 	// Connect to RabbitMQ server
 	time.Sleep(time.Second * 15)
-	conn, err := dial("amqp://guest:guest@10.9.0.10:5672/")
+	conn, err := dial("amqp://guest:guest@10.9.0.15:5672/")
 	failOnError(err, "Failed to connect to RabbitMQ")
 	defer conn.Close()
 
