@@ -43,7 +43,7 @@ func NewTransactionStore() *TransactionStore {
 	return &TransactionStore{setupRedis(), context.Background()}
 
 }
-func (b *Notification) Pending(t *TransactionStore) error {
+func (b *Notification) Pending(t PendingTransactorSource) error {
 	err := t.Store(b.Userid, b.Topic, b)
 	return err
 }
@@ -125,19 +125,18 @@ func (u *UserStore) Execute(t func(context.Context) error) error {
 	return transactionError
 }
 
-func (n *Notification) ReadUser(s *UserStore) (user_collection *user_doc, err error) {
-
+func (s *UserStore) getUser(note CommandType, uid UserId) (user_collection *user_doc, err error) {
 	if s.db == nil {
 		s.db, s.ctx = connect()
 	}
 	var result user_doc
-	err = s.db.Database(database).Collection("users").FindOne(s.ctx, bson.D{{"username", n.Userid}}).Decode(&result)
+	err = s.db.Database(database).Collection("users").FindOne(s.ctx, bson.D{{"username", uid}}).Decode(&result)
 
 	if err != nil {
-		if err.Error() == "mongo: no documents in result" && n.Topic == notifyADD {
+		if err.Error() == "mongo: no documents in result" && note == notifyADD {
 
 			var new_doc = new(user_doc)
-			new_doc.Username = n.Userid
+			new_doc.Username = uid
 			new_doc.Hash = "unsecure_this_user_never_made_account_via_backend"
 			new_doc.Balance = 0
 			new_doc.Stonks = make(map[string]float64)
@@ -158,17 +157,21 @@ func (n *Notification) ReadUser(s *UserStore) (user_collection *user_doc, err er
 		}
 
 	}
-	return &result, nil
+	return &result, err
+}
+func (n *Notification) ReadUser(s UserTransactorSource) (user_collection *user_doc, err error) {
+
+	return s.getUser(n.Topic, n.Userid)
 }
 
-func (u *user_doc) Backup(s *UserStore) error {
+func (s *UserStore) setUser(username UserId, balance float32, stocks map[string]float64) error {
 	if s.db == nil {
 		s.db, s.ctx = connect()
 	}
 	collection := s.db.Database(database).Collection("users")
 
-	selected_user := bson.M{"username": u.Username}
-	updated_user := bson.M{"$set": bson.M{"balance": u.Balance, "stonks": u.Stonks}}
+	selected_user := bson.M{"username": username}
+	updated_user := bson.M{"$set": bson.M{"balance": balance, "stonks": stocks}}
 	_, err := collection.UpdateOne(context.TODO(), selected_user, updated_user)
 
 	if err != nil {
@@ -176,6 +179,11 @@ func (u *user_doc) Backup(s *UserStore) error {
 		return err
 	}
 	return err
+
+}
+
+func (u *user_doc) Backup(s UserTransactorSource) error {
+	return s.setUser(u.Username, u.Balance, u.Stonks)
 }
 func (us *UserStore) Disconnect() {
 	us.db.Disconnect(us.ctx)

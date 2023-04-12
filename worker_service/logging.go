@@ -10,8 +10,12 @@ import (
 )
 
 var logchannel *amqp.Channel
+var isTesting = false
 
 func sendLog(topic string, content []byte) error {
+	if isTesting {
+		return nil
+	}
 	return logchannel.Publish(
 		"logs_topic", // exchange
 		topic,        // routing key
