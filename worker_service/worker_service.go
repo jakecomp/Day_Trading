@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	DEBUG = true
+	DEBUG = false
 
 	MAX_CONCURRENT_JOBS = 300
 	redisHOST           = "10.9.0.7"
