@@ -352,7 +352,7 @@ export const Home = (props: any) => {
                         <img src={wallet} />
                         <DataTextContainer>
                             <DataValue>$ {balanceValue}</DataValue>
-                            <DataName>Trading Balance</DataName>
+                            <DataName>Account Balance</DataName>
                         </DataTextContainer>
                     </DataContainer>
                     <MediumBlackButton onClick={() => setAddFundsPopup(true)}>Add Funds</MediumBlackButton>
