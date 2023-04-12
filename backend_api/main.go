@@ -18,6 +18,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/crypto/bcrypt"
+	"io/ioutil"
 )
 
 var db *mongo.Client
@@ -94,6 +95,7 @@ func homePage(w http.ResponseWriter, r *http.Request) {
 }
 
 func Signup(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("signup hit")
 	setupCORS(w, r)
 	if (*r).Method == "OPTIONS" {
 		return
@@ -132,7 +134,7 @@ func Signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// fmt.Fprintf(w, "SUCCESS")
+	fmt.Fprintf(w, "SUCCESS")
 }
 
 func Signin(w http.ResponseWriter, r *http.Request) {
@@ -141,6 +143,7 @@ func Signin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Println("signin hit")
 	// Parse and decode the request body into a new `Credentials` instance
 	creds := &Credentials{}
 	err := json.NewDecoder(r.Body).Decode(creds)
@@ -341,7 +344,7 @@ func main() {
 	db, ctx = connect()
 	defer db.Disconnect(ctx)
 
-	//log.SetOutput(ioutil.Discard)
+	log.SetOutput(ioutil.Discard)
 
 	// Connect to RabbitMQ server
 	time.Sleep(time.Second * 15)
