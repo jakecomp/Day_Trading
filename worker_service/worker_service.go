@@ -92,11 +92,11 @@ func getQuote(stock string) Stock {
 	var stonks Stock
 	rsp, err := http.Get("http://" + quoteHOST + ":8002/" + stock)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 	body, err := ioutil.ReadAll(rsp.Body)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 	json.Unmarshal(body, &stonks)
 	return stonks
