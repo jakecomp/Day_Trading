@@ -53,3 +53,7 @@ play around; change auto scale for w/e deployments
 kubectl autoscale deployment/backend-deploy --min=1 --max=3
 minikube start --nodes=2 //or more? extra nodes
 ``` 
+
+To test fault tolerance run chaos_test.sh
+
+This will take down a pod every 30s by default
