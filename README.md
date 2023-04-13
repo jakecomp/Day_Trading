@@ -23,8 +23,8 @@ the instructions on the README file.
 
 
 ## Run System on Kubernetes
-You will probs need latest docker and minikube versions so update.
-until I move it all into the docker buildblkz container
+You will need latest docker version 23.0.3 or later and minikube
+version v1.29.0 or later.
 
 All commands done from top level folder
 
@@ -33,7 +33,8 @@ Build Images
 ```bash
 docker compose build
 ```  
-run start_k8s.sh to initalize/start cluster
+
+run `./start_k8s.sh` to initalize/start cluster
 
 wait for a little while so services can start, and then portforward backend service so cli_app can access it
 
