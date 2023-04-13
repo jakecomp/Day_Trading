@@ -259,45 +259,150 @@ const rabbitmqHOST = "10.9.0.10"
 func timestamp() int64 {
 	return time.Now().Unix()
 }
-
 func handleRequests() {
 
-	http.HandleFunc("/userlog", createLogEndpoint[*userCommand](func(d *userCommand) {}))
+	http.HandleFunc("/userlog", userlog)
 
-	http.HandleFunc("/accountlog", createLogEndpoint[*accountTransaction](func(d *accountTransaction) {}))
+	http.HandleFunc("/accountlog", accountlog)
 
-	http.HandleFunc("/quotelog", createLogEndpoint[*quoteServer](func(d *quoteServer) {}))
+	http.HandleFunc("/quotelog", quotelog)
 
-	http.HandleFunc("/systemlog", createLogEndpoint[*systemEvent](func(d *systemEvent) {}))
+	http.HandleFunc("/systemlog", systemlog)
 
-	http.HandleFunc("/errorlog", createLogEndpoint[*debugEvent](func(d *debugEvent) {}))
+	http.HandleFunc("/errorlog", errorlog)
 
-	http.HandleFunc("/debuglog", createLogEndpoint[*debugEvent](func(d *debugEvent) {}))
+	http.HandleFunc("/debuglog", debuglog)
 
-	http.HandleFunc("/dumplog",
-		createLogEndpoint[*dumplogEvent](func(d *dumplogEvent) {
-			d.ServerName = "stoinks_server"
-			d.Filename = "stocklog.xml"
-		}))
+	http.HandleFunc("/dumplog", dumplog)
 
 	log.Fatal(http.ListenAndServe(":8004", nil))
 
 }
-func createLogEndpoint[T LogType](extraModifications func(a T)) func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var recive_log T
-		err := json.NewDecoder(r.Body).Decode(recive_log)
-		if err != nil {
-			// If there is something wrong with the request body, return a 400 status
-			fmt.Println("Error with request format")
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		recive_log.SetTimestamp()
-		extraModifications(recive_log)
-		out, _ := xml.MarshalIndent(recive_log, "", "\t")
-		f.WriteString(string(out))
-		f.WriteString("\n")
-	}
 
+func dumplog(w http.ResponseWriter, r *http.Request) {
+
+	recive_log := &dumplogEvent{}
+	err := json.NewDecoder(r.Body).Decode(recive_log)
+	if err != nil {
+		// If there is something wrong with the request body, return a 400 status
+		fmt.Println("Error with request format")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	recive_log.Timestamp = timestamp()
+	recive_log.ServerName = "stoinks_server"
+	recive_log.Filename = "stocklog.xml"
+	//_ = xml.NewEncoder(*xmlwriter).Encode(recive_log)
+	out, _ := xml.MarshalIndent(recive_log, "", "\t")
+	//fmt.Println(string(out))
+	f.WriteString(string(out))
+	f.WriteString("\n")
+}
+
+func userlog(w http.ResponseWriter, r *http.Request) {
+
+	recive_log := &userCommand{}
+	err := json.NewDecoder(r.Body).Decode(recive_log)
+	if err != nil {
+		// If there is something wrong with the request body, return a 400 status
+		fmt.Println("Error with request format")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	recive_log.Timestamp = timestamp()
+	recive_log.ServerName = "stoinks_server"
+	//_ = xml.NewEncoder(*xmlwriter).Encode(recive_log)
+	out, _ := xml.MarshalIndent(recive_log, "", "\t")
+	//fmt.Println(string(out))
+	f.WriteString(string(out))
+	f.WriteString("\n")
+
+}
+
+func accountlog(w http.ResponseWriter, r *http.Request) {
+
+	recive_log := &accountTransaction{}
+	err := json.NewDecoder(r.Body).Decode(recive_log)
+	if err != nil {
+		// If there is something wrong with the request body, return a 400 status
+		fmt.Println("Error with request format")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	recive_log.Timestamp = timestamp()
+	recive_log.ServerName = "stoinks_server"
+	//_ = xml.NewEncoder(*xmlwriter).Encode(recive_log)
+	out, _ := xml.MarshalIndent(recive_log, "", "\t")
+	//fmt.Println(string(out))
+	f.WriteString(string(out))
+	f.WriteString("\n")
+}
+func quotelog(w http.ResponseWriter, r *http.Request) {
+	recive_log := &quoteServer{}
+	err := json.NewDecoder(r.Body).Decode(recive_log)
+	if err != nil {
+		// If there is something wrong with the request body, return a 400 status
+		fmt.Println("Error with request format")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	recive_log.Timestamp = timestamp()
+	recive_log.ServerName = "stoinks_server"
+	//_ = xml.NewEncoder(*xmlwriter).Encode(recive_log)
+	out, _ := xml.MarshalIndent(recive_log, "", "\t")
+	//fmt.Println(string(out))
+	f.WriteString(string(out))
+	f.WriteString("\n")
+}
+func systemlog(w http.ResponseWriter, r *http.Request) {
+	recive_log := &systemEvent{}
+	err := json.NewDecoder(r.Body).Decode(recive_log)
+	if err != nil {
+		// If there is something wrong with the request body, return a 400 status
+		fmt.Println("Error with request format")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	recive_log.Timestamp = timestamp()
+	recive_log.ServerName = "stoinks_server"
+	//_ = xml.NewEncoder(*xmlwriter).Encode(recive_log)
+	out, _ := xml.MarshalIndent(recive_log, "", "\t")
+	//fmt.Println(string(out))
+	f.WriteString(string(out))
+	f.WriteString("\n")
+}
+func errorlog(w http.ResponseWriter, r *http.Request) {
+	recive_log := &errorEvent{}
+	err := json.NewDecoder(r.Body).Decode(recive_log)
+	if err != nil {
+		// If there is something wrong with the request body, return a 400 status
+		fmt.Println("Error with request format")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	recive_log.Timestamp = timestamp()
+	recive_log.ServerName = "stoinks_server"
+	//_ = xml.NewEncoder(*xmlwriter).Encode(recive_log)
+	out, _ := xml.MarshalIndent(recive_log, "", "\t")
+	//fmt.Println(string(out))
+	f.WriteString(string(out))
+	f.WriteString("\n")
+}
+
+func debuglog(w http.ResponseWriter, r *http.Request) {
+	recive_log := &debugEvent{}
+	err := json.NewDecoder(r.Body).Decode(recive_log)
+	if err != nil {
+		// If there is something wrong with the request body, return a 400 status
+		fmt.Println("Error with request format")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	recive_log.Timestamp = timestamp()
+	//_ = xml.NewEncoder(*xmlwriter).Encode(recive_log)
+	out, _ := xml.MarshalIndent(recive_log, "", "\t")
+	fmt.Println(string(out))
+	// fmt.Println(string(out))
+	f.WriteString(string(out))
+	f.WriteString("\n")
 }
