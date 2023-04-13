@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	mqhost    = "10.9.0.10"
+	mqhost    = "10.9.0.15"
 	quotehost = "10.9.0.6"
 )
 

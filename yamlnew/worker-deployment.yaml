@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: seng-trade-app
+  annotations:
+    kompose.cmd: kompose convert -f docker-compose.yml
+    kompose.version: 1.28.0 (c4137012e)
+  labels:
+    io.kompose.network/net-10.9.0.0: "true"
+    io.kompose.service: worker
+  name: worker-deploy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      io.kompose.service: worker
+  strategy: {}
+  template:
+    metadata:
+      annotations:
+        kompose.cmd: kompose convert -f docker-compose.yml
+        kompose.version: 1.28.0 (c4137012e)
+      labels:
+        io.kompose.network/net-10.9.0.0: "true"
+        io.kompose.service: worker
+    spec:
+      containers:
+        - image: seng_468-worker
+          imagePullPolicy: IfNotPresent
+          name: worker
+          ports:
+            - containerPort: 8003
+          resources: {}
+      restartPolicy: Always
+status: {}

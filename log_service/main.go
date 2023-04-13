@@ -5,11 +5,12 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"github.com/streadway/amqp"
 	"log"
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/streadway/amqp"
 )
 
 type LogType interface {
@@ -254,7 +255,7 @@ func main() {
 
 }
 
-const rabbitmqHOST = "10.9.0.10"
+const rabbitmqHOST = "10.9.0.15"
 
 func timestamp() int64 {
 	return time.Now().Unix()

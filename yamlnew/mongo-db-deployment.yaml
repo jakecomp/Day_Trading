@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: seng-trade-app
+  annotations:
+    kompose.cmd: kompose convert -f docker-compose.yml
+    kompose.version: 1.28.0 (c4137012e)
+  labels:
+    io.kompose.network/net-10.9.0.0: "true"
+    io.kompose.service: mongo-db
+  name: mongo-db-deploy
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      io.kompose.service: mongo-db
+  strategy: {}
+  template:
+    metadata:
+      annotations:
+        kompose.cmd: kompose convert -f docker-compose.yml
+        kompose.version: 1.28.0 (c4137012e)
+      labels:
+        io.kompose.network/net-10.9.0.0: "true"
+        io.kompose.service: mongo-db
+    spec:
+      containers:
+        - image: seng_468-mongo_db
+          imagePullPolicy: IfNotPresent
+          name: mongo-db
+          ports:
+            - containerPort: 27017
+          resources: {}
+      restartPolicy: Always
+status: {}
