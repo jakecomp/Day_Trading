@@ -33,7 +33,8 @@ Build Images
 ```bash
 docker compose build
 ```  
-run start_k8s.sh to initalize/start cluster
+
+run `./start_k8s.sh` to initalize/start cluster
 
 wait for a little while so services can start, and then portforward backend service so cli_app can access it
 
