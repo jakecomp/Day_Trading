@@ -23,8 +23,8 @@ the instructions on the README file.
 
 
 ## Run System on Kubernetes
-You will probs need latest docker and minikube versions so update.
-until I move it all into the docker buildblkz container
+You will need latest docker version 23.0.3 or later and minikube
+version v1.29.0 or later.
 
 All commands done from top level folder
 
