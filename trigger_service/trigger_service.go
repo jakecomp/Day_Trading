@@ -159,6 +159,8 @@ func push_trigger(user_id string, current_price float64, current_triger Trigger,
 
 func check_triggers() {
 
+	triggerStore.lock.Lock()
+
 	// Iterate through each user
 	triggerStore.lock.Lock()
 	defer triggerStore.lock.Unlock()
@@ -182,10 +184,12 @@ func check_triggers() {
 					push_trigger(user_key, current_price, current_trigger, "FORCE_SELL")
 				}
 			} else {
-				fmt.Println("UNKNOWN TRIGGER COMMAND")
+				// fmt.Println("UNKNOWN TRIGGER COMMAND")
 			}
 		}
 	}
+
+	triggerStore.lock.Unlock()
 
 }
 
@@ -291,6 +295,7 @@ func triggerListener(queue amqp.Queue) {
 			log.Printf("Received a trigger ticket! %s", cmd.Command)
 			triggerStore.lock.Lock()
 			defer triggerStore.lock.Unlock()
+
 
 			if cmd.Command == "SET_BUY_AMOUNT" {
 				amount, _ := strconv.ParseFloat(cmd.Args[2], 64)

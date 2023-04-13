@@ -44,7 +44,7 @@ type Transaction struct {
 
 type CMD interface {
 	Notify() Notification
-	Prerequsite(t *TransactionStore) error
+	Prerequsite(t PendingTransactorSource) error
 	// Postrequsite(*MessageBus) error
 }
 
@@ -63,7 +63,7 @@ func (s *StockPricer) setPrice(stock string, price float64) error {
 	).Err()
 }
 
-func (s *StockPricer) lookupPrice(stock string, ticket int64) (Stock, error) {
+func (s StockPricer) lookupPrice(stock string, ticket int64) (Stock, error) {
 	key := "stock#" + stock
 	price, err := s.rdb.Get(context.Background(), key).Float64()
 	if err == nil {
@@ -81,7 +81,7 @@ func (s *StockPricer) lookupPrice(stock string, ticket int64) (Stock, error) {
 	return stonkVal, err
 }
 
-func UserAccountManager(mb *MessageBus, notification Notification, us *UserStore, s *StockPricer) {
+func UserAccountManager(mb *MessageBus, notification Notification, us UserTransactorSource, s StockPriceSource) {
 	// Map storing all the currently known stock prices
 	var err error
 
@@ -120,7 +120,7 @@ func UserAccountManager(mb *MessageBus, notification Notification, us *UserStore
 	}
 }
 
-func addMoney(newMoney Notification, s *UserStore) error {
+func addMoney(newMoney Notification, s UserTransactorSource) error {
 	var current_user_doc *user_doc
 	var err error
 	err = s.Execute(func(context.Context) error {
@@ -153,8 +153,9 @@ func addMoney(newMoney Notification, s *UserStore) error {
 
 }
 
-func sellStock(price float64, newMoney Notification, s *UserStore) error {
+func sellStock(price float64, newMoney Notification, s UserTransactorSource) error {
 	stocksSold := *newMoney.Amount / price
+	// TODO
 	var current_user_doc *user_doc
 	var err error
 
@@ -197,7 +198,7 @@ func sellStock(price float64, newMoney Notification, s *UserStore) error {
 	return err
 }
 
-func buyStock(price float64, newStock Notification, s *UserStore) error {
+func buyStock(price float64, newStock Notification, s UserTransactorSource) error {
 	stocksPurchased := *newStock.Amount / price
 	var current_user_doc *user_doc
 	var err error
@@ -248,10 +249,28 @@ func buyStock(price float64, newStock Notification, s *UserStore) error {
 	return err
 }
 
+type PendingTransactorSource interface {
+	lastPending(uid UserId, topic CommandType) (*Notification, error)
+	Store(uid UserId, topic CommandType, n *Notification) error
+}
+
+type UserTransactorSource interface {
+	Execute(t func(context.Context) error) error
+	getUser(CommandType, UserId) (*user_doc, error)
+	setUser(username UserId, balance float32, stocks map[string]float64) error
+	// ReadUser(s *UserStore) (user_collection *user_doc, err error)
+	// Backup(s *UserStore) error
+}
+
+type StockPriceSource interface {
+	setPrice(stock string, price float64) error
+	lookupPrice(stock string, ticket int64) (Stock, error)
+}
+
 // timout for a user
 // perticket
 // last active timestamp
-func Run(task CMD, m *MessageBus, t *TransactionStore, us *UserStore, s *StockPricer) {
+func Run(task CMD, m *MessageBus, t PendingTransactorSource, us UserTransactorSource, s StockPriceSource) {
 	log.Println("Executing prereq for ", reflect.TypeOf(task), task)
 	err := task.Prerequsite(t)
 	if err != nil {
@@ -300,7 +319,7 @@ func (a ADD) Notify() Notification {
 
 // lookup user balance
 // if invalid balance return an error describing this
-func (a ADD) Prerequsite(t *TransactionStore) error {
+func (a ADD) Prerequsite(t PendingTransactorSource) error {
 	if a.amount < 0 {
 		return errors.New(fmt.Sprint("Attempt to add negative value ", a.amount, " to user ", a.userId))
 	}
@@ -348,7 +367,7 @@ type BUY struct {
 
 // lookup user balance
 // if invalid balance return an error describing this
-func (b BUY) Prerequsite(t *TransactionStore) error {
+func (b BUY) Prerequsite(t PendingTransactorSource) error {
 	if b.amount < 0 {
 		return errors.New(fmt.Sprint("Attempt to buy a negative amount of ", b.stock, " that amount being ", b.amount, " for user ", b.userId))
 	}
@@ -400,7 +419,7 @@ type COMMIT_BUY struct {
 	buy    Notification
 }
 
-func (b *COMMIT_BUY) Prerequsite(t *TransactionStore) error {
+func (b *COMMIT_BUY) Prerequsite(t PendingTransactorSource) error {
 	n, err := t.lastPending(b.userId, notifyBUY)
 	if err != nil && err != redis.Nil {
 		log.Println(b, "failed to commit purchase")
@@ -465,7 +484,7 @@ type CANCEL_BUY struct {
 	buy    Notification
 }
 
-func (b *CANCEL_BUY) Prerequsite(t *TransactionStore) error {
+func (b *CANCEL_BUY) Prerequsite(t PendingTransactorSource) error {
 	n, err := t.lastPending(b.userId, notifyBUY)
 	if err != nil && err != redis.Nil {
 		log.Println(b, "failed to canceled purchase")
@@ -522,7 +541,7 @@ type SELL struct {
 	amount float64
 }
 
-func (s SELL) Prerequsite(t *TransactionStore) error {
+func (s SELL) Prerequsite(t PendingTransactorSource) error {
 	if s.amount < 0 {
 		return errors.New(fmt.Sprint("Attempt to sell a negative amount of ", s.stock, " that amount being ", s.amount, " for user ", s.userId))
 	}
@@ -571,7 +590,7 @@ type COMMIT_SELL struct {
 	sell   Notification
 }
 
-func (s *COMMIT_SELL) Prerequsite(t *TransactionStore) error {
+func (s *COMMIT_SELL) Prerequsite(t PendingTransactorSource) error {
 	n, err := t.lastPending(s.userId, notifySELL)
 	if err != nil && err != redis.Nil {
 		return err
@@ -634,7 +653,7 @@ type CANCEL_SELL struct {
 	sell   Notification
 }
 
-func (s *CANCEL_SELL) Prerequsite(t *TransactionStore) error {
+func (s *CANCEL_SELL) Prerequsite(t PendingTransactorSource) error {
 	n, err := t.lastPending(s.userId, notifySELL)
 	if err != nil && err != redis.Nil {
 		log.Println(s, "failed to find a sale to cancel")
@@ -694,7 +713,7 @@ type FORCE_BUY struct {
 	amount float64
 }
 
-func (b *FORCE_BUY) Prerequsite(t *TransactionStore) error {
+func (b *FORCE_BUY) Prerequsite(t PendingTransactorSource) error {
 	return nil
 }
 
@@ -751,7 +770,7 @@ type FORCE_SELL struct {
 	amount float64
 }
 
-func (b *FORCE_SELL) Prerequsite(t *TransactionStore) error {
+func (b *FORCE_SELL) Prerequsite(t PendingTransactorSource) error {
 	return nil
 }
 
