@@ -22,4 +22,34 @@ Once all the services are up and running navigate to the cli_app directory. In t
 the instructions on the README file. 
 
 
+## Run System on Kubernetes
+You will probs need latest docker and minikube versions so update.
+until I move it all into the docker buildblkz container
 
+All commands done from top level folder
+
+Build Images
+
+```bash
+docker compose build
+```  
+run start_k8s.sh to initalize/start cluster
+
+wait for a little while so services can start, and then portforward backend service so cli_app can access it
+
+```bash
+kubectl port-forward service/backend 8000:8000 -n seng-trade-app 
+```  
+
+test workflow
+
+```bash
+./cli_app/app < ./cli_app/workflows/user10.txt 
+```  
+
+play around; change auto scale for w/e deployments
+
+```bash
+kubectl autoscale deployment/backend-deploy --min=1 --max=3
+minikube start --nodes=2 //or more? extra nodes
+``` 
